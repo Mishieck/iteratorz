@@ -1,9 +1,9 @@
-pub const bytes = @import("bytes.zig");
+pub const vector = @import("vector.zig");
 pub const filter = @import("filter.zig");
 pub const map = @import("map.zig");
 
 test {
-    _ = @import("bytes.zig");
-    _ = @import("filter.zig");
-    _ = @import("map.zig");
+    _ = vector;
+    _ = filter;
+    _ = map;
 }
