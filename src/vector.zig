@@ -1,79 +1,143 @@
 const std = @import("std");
 const testing = std.testing;
+const ib = @import("iterable.zig");
+const it = @import("iterator.zig");
+const ii = @import("iterable_iterator.zig");
 
-pub fn Readable(Item: type) type {
+pub fn Vector(Value: type) type {
     return struct {
         const Self = @This();
+        pub const ValueType = Value;
+        pub const StateType = State;
 
-        slice: []const Item,
-        index: usize = 0,
+        pub const Interface = ib.Iterable(Value, State);
+        pub const Vec = []Value;
 
-        pub fn next(self: *Self) !?Item {
-            if (self.index >= self.slice.len) return null;
-            const item = self.slice[self.index];
-            self.index += 1;
-            return item;
+        interface: Interface,
+        vector: Vec,
+        index: State = .{ .valid = 0 },
+
+        pub fn init(vector: Vec) Self {
+            return .{
+                .interface = .{
+                    .getValue = getValue,
+                    .setValue = setValue,
+                    .getState = getState,
+                    .setState = setState,
+                    .setNextState = setNextState,
+                    .setPreviousState = setPreviousState,
+                    .setInitialState = setInitialState,
+                    .setFinalState = setFinalState,
+                    .isStateValid = isStateValid,
+                },
+                .vector = vector,
+            };
         }
 
-        pub fn previous(self: *Self) !?Item {
-            if (self.index == 0) return null;
-            self.index -= 1;
-            const item = self.slice[self.index];
-            return item;
+        pub fn getValue(iterable: *Interface) anyerror!Value {
+            const self: *Self = @fieldParentPtr("interface", iterable);
+            return self.vector[self.index.valid];
         }
 
-        pub inline fn to(self: *Self, Iterator: type) *Iterator {
-            return Iterator.from(self);
+        pub fn setValue(iterable: *Interface, value: Value) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", iterable);
+            self.vector[self.index.valid] = value;
+            return iterable;
+        }
+
+        pub fn getState(iterable: *Interface) anyerror!State {
+            const self: *Self = @fieldParentPtr("interface", iterable);
+            return self.index;
+        }
+
+        pub fn setState(iterable: *Interface, index: State) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", iterable);
+            self.index = switch (index) {
+                .valid => |v| if (v < self.vector.len) index else return error.InvalidState,
+                else => index,
+            };
+            return iterable;
+        }
+
+        pub fn setNextState(iterable: *Interface) anyerror!*Interface {
+            const self: *Self = @fieldParentPtr("interface", iterable);
+            self.index = switch (self.index) {
+                .underflow => .{ .valid = 0 },
+                .valid => |index| valid: {
+                    const value, const overflow = @addWithOverflow(index, 1);
+                    const has_overflowed = overflow == 1 or value == self.vector.len;
+                    break :valid if (has_overflowed) .overflow else .{ .valid = value };
+                },
+                .overflow => .overflow,
+            };
+            return iterable;
+        }
+
+        pub fn setPreviousState(iterable: *Interface) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", iterable);
+            self.index = switch (self.index) {
+                .underflow => .underflow,
+                .valid => |index| if (index == 0) .underflow else .{ .valid = index - 1 },
+                .overflow => if (self.vector.len == 0) .overflow else .{ .valid = self.vector.len - 1 },
+            };
+            return iterable;
+        }
+
+        pub fn setInitialState(iterable: *Interface) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", iterable);
+            self.index = if (self.vector.len > 0) .{ .valid = 0 } else .overflow;
+            return iterable;
+        }
+
+        pub fn setFinalState(iterable: *Interface) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", iterable);
+            self.index = if (self.vector.len > 0) .{ .valid = self.vector.len - 1 } else .overflow;
+            return iterable;
+        }
+
+        pub fn isStateValid(iterable: *Interface) anyerror!bool {
+            const self: *Self = @fieldParentPtr("interface", iterable);
+            return switch (self.index) {
+                .valid => |_| true,
+                else => false,
+            };
         }
     };
 }
 
-test Readable {
-    const slice = "hello";
-    var b = Readable(u8){ .slice = slice };
+test Vector {
+    const Bytes = Vector(u8);
+    const BytesIbIt = ii.IterableIterator(Bytes.ValueType, Bytes.StateType);
+    const ReadableIterator = BytesIbIt.Readable;
+    const WritableIterator = BytesIbIt.Writable;
+    const Iterator = it.Iterator(Bytes.ValueType, Bytes.StateType);
+
+    const slice: []u8 = @constCast("hello");
+
+    var readable_bytes = Bytes.init(slice);
+    var readable_bytes_ii = ReadableIterator.init(&readable_bytes.interface);
+    var readable_iter = Iterator.Readable.from(&readable_bytes_ii.interface);
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
-    while (try b.next()) |char| {
+    while (try readable_iter.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
 
     try testing.expectEqualStrings(slice, &iterated);
-}
 
-pub fn Writable(Item: type) type {
-    return struct {
-        const Self = @This();
-
-        slice: []Item,
-        index: usize = 0,
-
-        pub fn next(self: *Self, item: Item) !?*Self {
-            if (self.index >= self.slice.len) return null;
-            self.slice[self.index] = item;
-            self.index += 1;
-            return self;
-        }
-
-        pub fn previous(self: *Self, item: Item) !?*Self {
-            if (self.index == 0) return null;
-            self.index -= 1;
-            self.slice[self.index] = item;
-            return self;
-        }
-
-        pub inline fn to(self: *Self, Iterator: type) *Iterator {
-            return Iterator.from(self);
-        }
-    };
-}
-
-test Writable {
-    const slice = "hello";
     var buffer: [slice.len]u8 = undefined;
-    var b = Writable(u8){ .slice = &buffer };
+    var writable_bytes = Bytes.init(&buffer);
+    var writable_bytes_ii = WritableIterator.init(&writable_bytes.interface);
+    var writable_iter = Iterator.Writable.from(&writable_bytes_ii.interface);
 
-    for (slice) |char| _ = try b.next(char);
-    try testing.expectEqualStrings(slice, b.slice);
+    for (slice) |char| _ = try writable_iter.current(char);
+    try testing.expectEqualStrings(slice, &buffer);
 }
+
+pub const State = union(enum) {
+    underflow,
+    valid: usize,
+    overflow,
+};
