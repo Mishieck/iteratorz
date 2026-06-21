@@ -112,6 +112,7 @@ pub fn IterableIterator(Value: type, State: type) type {
                         .setState = setState,
                         .setInitialState = setInitialState,
                         .setFinalState = setFinalState,
+                        .commit = commit,
                     },
                     .iterable = iterable,
                 };
@@ -177,6 +178,12 @@ pub fn IterableIterator(Value: type, State: type) type {
             fn setFinalState(iterator: *WritableIterator) anyerror!*WritableIterator {
                 var self: *Self = @fieldParentPtr("interface", iterator);
                 _ = try self.iterable.setFinalState(self.iterable);
+                return iterator;
+            }
+
+            fn commit(iterator: *WritableIterator) anyerror!*WritableIterator {
+                var self: *Self = @fieldParentPtr("interface", iterator);
+                _ = try self.iterable.commit(self.iterable);
                 return iterator;
             }
         };

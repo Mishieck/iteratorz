@@ -14,6 +14,7 @@ pub fn Iterable(Value: type, State: type) type {
         setInitialState: *const fn (iterable: *It) anyerror!*It,
         setFinalState: *const fn (iterable: *It) anyerror!*It,
         isStateValid: *const fn (iterable: *It) anyerror!bool,
+        commit: *const fn (iterable: *It) anyerror!*It,
     };
 }
 
