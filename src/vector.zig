@@ -10,7 +10,7 @@ pub fn Vector(Value: type) type {
         pub const ValueType = Value;
         pub const StateType = State;
 
-        pub const Interface = ib.Iterable(Value, State);
+        pub const Interface = ib.Iterable(Value, State).Interface;
         pub const Vec = []Value;
 
         interface: Interface,
@@ -107,11 +107,16 @@ pub fn Vector(Value: type) type {
         pub fn commit(iterable: *Interface) anyerror!*Interface {
             return iterable;
         }
+
+        pub fn written(self: *const Self) []const u8 {
+            return self.vector[0..self.index.valid];
+        }
     };
 }
 
 test Vector {
     const Bytes = Vector(u8);
+    const Iterable = ib.Iterable(u8, State);
     const BytesIbIt = ii.IterableIterator(Bytes.ValueType, Bytes.StateType);
     const ReadableIterator = BytesIbIt.Readable;
     const WritableIterator = BytesIbIt.Writable;
@@ -120,7 +125,8 @@ test Vector {
     const slice: []u8 = @constCast("hello");
 
     var readable_bytes = Bytes.init(slice);
-    var readable_bytes_ii = ReadableIterator.init(&readable_bytes.interface);
+    var readable_ib = Iterable.init(&readable_bytes.interface);
+    var readable_bytes_ii = ReadableIterator.init(&readable_ib);
     var readable_iter = Iterator.Readable.from(&readable_bytes_ii.interface);
     var iterated: [slice.len]u8 = undefined;
 
@@ -134,7 +140,8 @@ test Vector {
 
     var buffer: [slice.len]u8 = undefined;
     var writable_bytes = Bytes.init(&buffer);
-    var writable_bytes_ii = WritableIterator.init(&writable_bytes.interface);
+    var writable_ib = Iterable.init(&writable_bytes.interface);
+    var writable_bytes_ii = WritableIterator.init(&writable_ib);
     var writable_iter = Iterator.Writable.from(&writable_bytes_ii.interface);
 
     for (slice) |char| _ = try writable_iter.current(char);

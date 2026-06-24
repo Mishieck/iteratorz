@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
+const ib = @import("iterable.zig");
 const ii = @import("iterable_iterator.zig");
 const vector = @import("vector.zig");
 const it = @import("iterator.zig");
@@ -104,13 +105,15 @@ test Readable {
     const Value = u8;
     const State = vector.State;
     const Vec = vector.Vector(Value);
-    const IbIt = ii.IterableIterator(Value, State);
+    const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
+    const IbIt = ii.IterableIterator(Value, State);
 
     const slice: []Vec.ValueType = @constCast("hello");
     const vowels = "eo";
     var vec = Vec.init(slice);
-    var ib_it = IbIt.Readable.init(&vec.interface);
+    var vec_ib = Ib.init(&vec.interface);
+    var ib_it = IbIt.Readable.init(&vec_ib);
     var iter = It.Readable.init(&ib_it.interface);
     var f = iter.to(Readable(It, isVowel));
     var iterated: [slice.len]u8 = undefined;
@@ -236,14 +239,16 @@ test Writable {
     const Value = u8;
     const State = vector.State;
     const Vec = vector.Vector(Value);
-    const IbIt = ii.IterableIterator(Value, State);
+    const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
+    const IbIt = ii.IterableIterator(Value, State);
 
     const slice: []Value = @constCast("hello");
     const vowels = "eo";
     var buffer: [slice.len]u8 = undefined;
     var vec = Vec.init(&buffer);
-    var ib_it = IbIt.Writable.init(&vec.interface);
+    var vec_ib = Ib.init(&vec.interface);
+    var ib_it = IbIt.Writable.init(&vec_ib);
     var iter = It.Writable.init(&ib_it.interface);
     var f = iter.to(Writable(It, isVowel));
 
