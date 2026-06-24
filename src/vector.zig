@@ -29,7 +29,6 @@ pub fn Vector(Value: type) type {
                     .setInitialState = setInitialState,
                     .setFinalState = setFinalState,
                     .isStateValid = isStateValid,
-                    .commit = commit,
                 },
                 .vector = vector,
             };
@@ -102,10 +101,6 @@ pub fn Vector(Value: type) type {
                 .valid => |_| true,
                 else => false,
             };
-        }
-
-        pub fn commit(iterable: *Interface) anyerror!*Interface {
-            return iterable;
         }
 
         pub fn written(self: *const Self) []const u8 {

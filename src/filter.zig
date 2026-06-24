@@ -162,7 +162,6 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
                     .setState = setState,
                     .setInitialState = setInitialState,
                     .setFinalState = setFinalState,
-                    .commit = commit,
                 },
                 .base_iterator = base_iterator,
             };
@@ -220,12 +219,6 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
         fn setFinalState(iterator: *WritableIterator) anyerror!*WritableIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
-            return iterator;
-        }
-
-        fn commit(iterator: *WritableIterator) anyerror!*WritableIterator {
-            const self: *Self = @fieldParentPtr("interface", iterator);
-            _ = try self.base_iterator.commit(self.base_iterator);
             return iterator;
         }
 

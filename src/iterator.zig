@@ -85,7 +85,6 @@ pub fn Iterator(Value: type, State: type) type {
                 setState: *const fn (iterator: *It, state: State) anyerror!*It,
                 setInitialState: *const fn (iterator: *It) anyerror!*It,
                 setFinalState: *const fn (iterator: *It) anyerror!*It,
-                commit: *const fn (iterator: *It) anyerror!*It,
             };
 
             interface: *Interface,
@@ -129,11 +128,6 @@ pub fn Iterator(Value: type, State: type) type {
 
             pub fn setFinalState(self: *Self) anyerror!*Self {
                 _ = try self.interface.setFinalState(self.interface);
-                return self;
-            }
-
-            pub fn commit(self: *Self) anyerror!*Self {
-                _ = try self.interface.commit(self.interface);
                 return self;
             }
 

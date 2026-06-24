@@ -57,7 +57,6 @@ pub fn init(file: fs.File, buffer: *Interface, action: Action, mode: Mode) Self 
             .setInitialState = setInitialState,
             .setFinalState = setFinalState,
             .isStateValid = isStateValid,
-            .commit = commit,
         },
         .file = file,
         .action = action,
@@ -208,15 +207,6 @@ pub fn isStateValid(iterable: *Interface) anyerror!bool {
         .valid => |_| true,
         else => false,
     };
-}
-
-pub fn commit(iterable: *Interface) anyerror!*Interface {
-    const self: *Self = @alignCast(@fieldParentPtr("interface", iterable));
-    _ = switch (self.action) {
-        .read => self.read(),
-        .write => self.write(),
-    } catch return error.CommitFailed;
-    return iterable;
 }
 
 pub fn read(self: *Self) std.Io.Reader.Error!*Self {

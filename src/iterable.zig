@@ -17,7 +17,6 @@ pub fn Iterable(Value: type, State: type) type {
             setInitialState: *const fn (iterable: *It) anyerror!*It,
             setFinalState: *const fn (iterable: *It) anyerror!*It,
             isStateValid: *const fn (iterable: *It) anyerror!bool,
-            commit: *const fn (iterable: *It) anyerror!*It,
         };
 
         interface: *Interface,
@@ -66,11 +65,6 @@ pub fn Iterable(Value: type, State: type) type {
 
         pub fn isStateValid(self: *Self) anyerror!bool {
             return self.interface.isStateValid(self.interface);
-        }
-
-        pub fn commit(self: *Self) anyerror!*Self {
-            _ = try self.interface.commit(self.interface);
-            return self;
         }
     };
 }
