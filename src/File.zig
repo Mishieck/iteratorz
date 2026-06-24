@@ -27,8 +27,6 @@ const ii = @import("iterable_iterator.zig");
 const Self = @This();
 pub const Value = u8;
 
-pub const Action = enum { read, write };
-
 pub const Iterable = ib.Iterable(Value, State);
 pub const Interface = Iterable.Interface;
 pub const Vector = vec.Vector(Value);
@@ -41,11 +39,10 @@ file: fs.File,
 file_size: ?u64 = null,
 buffer: Iterable,
 buffered_size: u64 = 0,
-action: Action,
-mode: Mode = .positional,
+mode: Mode = Mode.default,
 index: State = .{ .valid = 0 },
 
-pub fn init(file: fs.File, buffer: *Interface, action: Action, mode: Mode) Self {
+pub fn init(file: fs.File, buffer: *Interface, mode: Mode) Self {
     return .{
         .interface = .{
             .getValue = getValue,
@@ -59,7 +56,6 @@ pub fn init(file: fs.File, buffer: *Interface, action: Action, mode: Mode) Self 
             .isStateValid = isStateValid,
         },
         .file = file,
-        .action = action,
         .mode = mode,
         .buffer = .init(buffer),
     };
@@ -89,8 +85,8 @@ pub fn setState(iterable: *Interface, index: State) anyerror!*Interface {
     var self: *Self = @fieldParentPtr("interface", iterable);
     switch (index) {
         .valid => |i| {
-            switch (self.action) {
-                .read => {
+            switch (self.mode) {
+                .read => |_| {
                     const file_size = try self.getSize();
 
                     if (i < file_size) {
@@ -98,7 +94,7 @@ pub fn setState(iterable: *Interface, index: State) anyerror!*Interface {
                         _ = try self.read();
                     } else return error.InvalidState;
                 },
-                .write => {
+                .write => |_| {
                     _ = try self.write();
                     self.index = index;
                 },
@@ -119,21 +115,44 @@ pub fn setPreviousState(iterable: *Interface) anyerror!*Interface {
     switch (self.index) {
         .underflow => self.index = .underflow,
         .valid => |index| {
-            if (index == 0) {
-                switch (self.action) {
-                    .read => _ = try self.buffer.setInitialState(),
-                    .write => _ = try self.write(),
-                }
-                self.index = .underflow;
-            } else if (self.buffered_size > 0) {
-                _ = self.buffer.setPreviousState() catch |err| switch (err) {
-                    error.InvalidState => _ = try iterable.setState(
-                        iterable,
-                        .{ .valid = index - 1 },
-                    ),
-                    else => return err,
-                };
-            } else _ = try iterable.setState(iterable, .{ .valid = index - 1 });
+            const new_index, const underflow = @subWithOverflow(index, 1);
+            const underflowed = underflow == 1;
+
+            switch (self.mode) {
+                .read => |_| {
+                    if (underflowed) {
+                        _ = try self.buffer.setInitialState();
+                        self.index = .underflow;
+                    } else if (self.buffered_size > 0) {
+                        _ = self.buffer.setPreviousState() catch |err| switch (err) {
+                            error.InvalidState => _ = try iterable.setState(
+                                iterable,
+                                .{ .valid = new_index },
+                            ),
+                            else => return err,
+                        };
+                    } else {
+                        self.index = .{ .valid = new_index };
+                        _ = try self.read();
+                    }
+                },
+                .write => |_| {
+                    if (underflowed) {
+                        _ = try self.write();
+                        self.index = .underflow;
+                    } else if (self.buffered_size > 0) {
+                        _ = self.buffer.setPreviousState() catch |err| switch (err) {
+                            error.InvalidState => _ = try iterable.setState(
+                                iterable,
+                                .{ .valid = new_index },
+                            ),
+                            else => return err,
+                        };
+                    } else {
+                        self.index = .{ .valid = new_index };
+                    }
+                },
+            }
         },
         .overflow => _ = try iterable.setState(iterable, .{ .valid = self.index.valid - 1 }),
     }
@@ -147,23 +166,23 @@ pub fn setNextState(iterable: *Interface) anyerror!*Interface {
     switch (self.index) {
         .underflow => _ = try iterable.setState(iterable, .{ .valid = 0 }),
         .valid => |index| {
-            const value, const overflow = @addWithOverflow(index + self.vector().index.valid, 1);
-            var has_overflowed = overflow == 1;
+            const new_index, const overflow = @addWithOverflow(index + self.vector().index.valid, 1);
+            var overflowed = overflow == 1;
 
-            switch (self.action) {
-                .read => {
+            switch (self.mode) {
+                .read => |_| {
                     const file_size = try self.getSize();
-                    has_overflowed = has_overflowed or value == file_size;
+                    overflowed = overflowed or new_index == file_size;
 
-                    if (has_overflowed) {
+                    if (overflowed) {
                         _ = try self.buffer.setInitialState();
                         self.index = .overflow;
                         return error.InvalidState;
                     } else if (self.buffered_size > 0) {
-                        switch (value < index + self.buffered_size) {
+                        switch (new_index < index + self.buffered_size) {
                             true => _ = try self.buffer.setNextState(),
                             false => {
-                                self.index = .{ .valid = value };
+                                self.index = .{ .valid = new_index };
                                 _ = try self.read();
                             },
                         }
@@ -171,8 +190,8 @@ pub fn setNextState(iterable: *Interface) anyerror!*Interface {
                         _ = try self.read();
                     }
                 },
-                .write => {
-                    if (has_overflowed) {
+                .write => |_| {
+                    if (overflowed) {
                         _ = try self.write();
                         self.index = .overflow;
                         return error.InvalidState;
@@ -211,9 +230,12 @@ pub fn isStateValid(iterable: *Interface) anyerror!bool {
 
 pub fn read(self: *Self) std.Io.Reader.Error!*Self {
     return switch (self.mode) {
-        .positional, .positional_reading => readPositional(self) catch return error.ReadFailed,
-        .streaming, .streaming_reading => readStreaming(self) catch return error.ReadFailed,
-        .failure => error.ReadFailed,
+        .read => |operation| switch (operation) {
+            .positional => |_| readPositional(self) catch return error.ReadFailed,
+            .streaming => |_| readStreaming(self) catch return error.ReadFailed,
+            .failure => error.ReadFailed,
+        },
+        else => unreachable,
     };
 }
 
@@ -222,10 +244,11 @@ pub fn readPositional(self: *Self) std.Io.Reader.Error!*Self {
     const size: usize = self.file.pread(self.vector().vector, index) catch |err| switch (err) {
         error.Unseekable => {
             self.mode = self.mode.toStreaming();
+
             if (index != 0) {
                 self.index = .{ .valid = 0 };
                 _ = self.seekBy(@intCast(index)) catch {
-                    self.mode = .failure;
+                    self.mode = self.mode.toFailure();
                     return error.ReadFailed;
                 };
             }
@@ -257,9 +280,12 @@ pub fn write(self: *Self) anyerror!*Self {
     const buffered = self.vector().vector;
 
     return switch (self.mode) {
-        .positional, .positional_reading => if (buffered.len != 0) try self.writePositional(buffered) else self,
-        .streaming, .streaming_reading => if (buffered.len != 0) try self.writeStreaming(buffered) else self,
-        .failure => return error.WriteFailed,
+        .write => |operation| switch (operation) {
+            .positional => |_| if (buffered.len != 0) try self.writePositional(buffered) else self,
+            .streaming => |_| if (buffered.len != 0) try self.writeStreaming(buffered) else self,
+            .failure => return error.WriteFailed,
+        },
+        else => unreachable,
     };
 }
 
@@ -288,7 +314,7 @@ pub fn writePositional(self: *Self, buffered: []const u8) anyerror!*Self {
             if (index != 0) {
                 self.index = .{ .valid = 0 };
                 _ = self.seekTo(@intCast(index)) catch {
-                    self.mode = .failure;
+                    self.mode = self.mode.toFailure();
                     return error.CommitFailed;
                 };
             }
@@ -323,25 +349,31 @@ pub fn seekBy(self: *Self, offset: i64) anyerror!*Self {
     const index = self.index.valid;
 
     switch (self.mode) {
-        .positional, .positional_reading => {
-            _ = try self.setPosAdjustingBuffer(@intCast(@as(i64, @as(i64, @bitCast(index)) + offset)));
-        },
-        .streaming, .streaming_reading => {
-            if (posix.SEEK == void) return error.Unseekable;
+        .read, .write => |operation| switch (operation) {
+            .positional => |_| {
+                _ = try self.setPosAdjustingBuffer(
+                    @intCast(@as(i64, @as(i64, @bitCast(index)) + offset)),
+                );
+            },
+            .streaming => |_| {
+                if (posix.SEEK == void) return error.Unseekable;
 
-            const seek_err = e: {
-                if (posix.lseek_CUR(self.file.handle, offset)) |_| {
-                    _ = try self.setPosAdjustingBuffer(@intCast(@as(i64, @as(i64, @bitCast(index)) + offset)));
-                    return self;
-                } else |err| break :e err;
-            };
-            var remaining = std.math.cast(u64, offset) orelse return seek_err;
-            while (remaining > 0) {
-                remaining -= try self.discard(.limited64(remaining));
-            }
-            _ = try iterable.setInitialState(iterable);
+                const seek_err = e: {
+                    if (posix.lseek_CUR(self.file.handle, offset)) |_| {
+                        _ = try self.setPosAdjustingBuffer(
+                            @intCast(@as(i64, @as(i64, @bitCast(index)) + offset)),
+                        );
+                        return self;
+                    } else |err| break :e err;
+                };
+                var remaining = std.math.cast(u64, offset) orelse return seek_err;
+                while (remaining > 0) {
+                    remaining -= try self.discard(.limited64(remaining));
+                }
+                _ = try iterable.setInitialState(iterable);
+            },
+            .failure => return error.Unseekable,
         },
-        .failure => return error.Unseekable,
     }
 
     return self;
@@ -363,16 +395,18 @@ fn setPosAdjustingBuffer(self: *Self, offset: u64) anyerror!*Self {
 
 pub fn seekTo(self: *Self, index: u64) anyerror!*Self {
     return switch (self.mode) {
-        .positional, .positional_reading => p: {
-            self.index = .{ .valid = index };
-            break :p self;
+        .read, .write => |operation| switch (operation) {
+            .positional => |_| p: {
+                self.index = .{ .valid = index };
+                break :p self;
+            },
+            .streaming => |_| s: {
+                try posix.lseek_SET(self.file.handle, index);
+                self.index = .{ .valid = index };
+                break :s self;
+            },
+            .failure => posix.SeekError.Unseekable,
         },
-        .streaming, .streaming_reading => s: {
-            try posix.lseek_SET(self.file.handle, index);
-            self.index = .{ .valid = index };
-            break :s self;
-        },
-        .failure => posix.SeekError.Unseekable,
     };
 }
 
@@ -380,28 +414,30 @@ fn discard(self: *Self, limit: std.Io.Limit) anyerror!usize {
     const file = self.file;
     const pos = self.index.valid;
     switch (self.mode) {
-        .positional, .positional_reading => {
-            const size = self.getSize() catch {
-                self.mode = self.mode.toStreaming();
-                return 0;
-            };
-            const delta = @min(@intFromEnum(limit), size - pos);
-            self.index = .{ .valid = pos + delta };
-            return delta;
+        .read, .write => |operation| switch (operation) {
+            .positional => |_| {
+                const size = self.getSize() catch {
+                    self.mode = self.mode.toStreaming();
+                    return 0;
+                };
+                const delta = @min(@intFromEnum(limit), size - pos);
+                self.index = .{ .valid = pos + delta };
+                return delta;
+            },
+            .streaming => |_| {
+                const size = self.getSize() catch return 0;
+                const n = @min(size - pos, maxInt(i64), @intFromEnum(limit));
+                file.seekBy(n) catch return 0;
+                self.index = .{ .valid = pos + n - 1 };
+                return n;
+            },
+            .failure => return error.ReadFailed,
         },
-        .streaming, .streaming_reading => {
-            const size = self.getSize() catch return 0;
-            const n = @min(size - pos, maxInt(i64), @intFromEnum(limit));
-            file.seekBy(n) catch return 0;
-            self.index = .{ .valid = pos + n - 1 };
-            return n;
-        },
-        .failure => return error.ReadFailed,
     }
 }
 
 pub fn getSize(self: *Self) anyerror!u64 {
-    if (self.file_size) |size| if (self.action == .read) return size;
+    if (self.file_size) |size| if (std.meta.activeTag(self.mode) == .read) return size;
 
     if (is_windows) {
         if (windows.GetFileSizeEx(self.file.handle)) |size| {
@@ -423,7 +459,92 @@ pub fn getSize(self: *Self) anyerror!u64 {
     } else |err| return err;
 }
 
+pub const Mode = union(enum) {
+    read: Operation,
+    write: Operation,
+
+    pub const default = Mode{ .read = Operation.default };
+
+    pub fn toStreaming(self: @This()) @This() {
+        const operation = switch (self) {
+            .read, .write => |op| op.toStreaming(),
+        };
+
+        return switch (self) {
+            .read => |_| @unionInit(Mode, "read", operation),
+            .write => |_| @unionInit(Mode, "write", operation),
+        };
+    }
+
+    pub fn toReading(self: @This()) @This() {
+        const operation = switch (self) {
+            .read, .write => |op| op.toReading(),
+        };
+
+        return switch (self) {
+            .read => |_| @unionInit(Mode, "read", operation),
+            .write => |_| @unionInit(Mode, "write", operation),
+        };
+    }
+
+    pub fn toFailure(self: @This()) @This() {
+        return switch (self) {
+            .read => |_| @unionInit(Mode, "read", .failure),
+            .write => |_| @unionInit(Mode, "write", .failure),
+        };
+    }
+
+    pub const Operation = union(enum) {
+        streaming: ReadWrite,
+        positional: ReadWrite,
+        /// Indicates reading cannot continue because of a seek failure.
+        failure,
+
+        pub const default = Operation{ .streaming = .read_write };
+
+        pub fn toStreaming(self: @This()) @This() {
+            return switch (self) {
+                .positional, .streaming => |read_write| switch (read_write) {
+                    .readonly => .{ .streaming = .readonly },
+                    .read_write => .{ .streaming = .read_write },
+                },
+                .failure => .failure,
+            };
+        }
+
+        pub fn toReading(self: @This()) @This() {
+            return switch (self) {
+                .positional => |_| .{ .positional = .readonly },
+                .streaming => |_| .{ .streaming = .readonly },
+                .failure => .failure,
+            };
+        }
+
+        pub fn toFailure(self: @This()) @This() {
+            return switch (self) {
+                .positional, .streaming, .failure => |_| .failure,
+            };
+        }
+
+        pub const ReadWrite = enum {
+            /// Allow only read system calls.
+            readonly,
+            /// Allow read and write system calls.
+            read_write,
+        };
+    };
+};
+
 test Self {
+    const Operation = Mode.Operation;
+    const operations = [2]Mode.Operation{
+        Operation{ .streaming = .read_write },
+        Operation{ .positional = .read_write },
+    };
+    for (operations) |op| try testFile(op);
+}
+
+fn testFile(operation: Mode.Operation) !void {
     const FileIbIt = ii.IterableIterator(Value, State);
     const ReadableIterator = FileIbIt.Readable;
     const WritableIterator = FileIbIt.Writable;
@@ -438,7 +559,7 @@ test Self {
 
     var buffer: [slice.len]u8 = undefined;
     var writable_vector = Vector.init(&buffer);
-    var writable_file = init(file, &writable_vector.interface, .write, .streaming);
+    var writable_file = init(file, &writable_vector.interface, .{ .write = operation });
     var writable_file_ib = Iterable.init(&writable_file.interface);
     var writable_file_ii = WritableIterator.init(&writable_file_ib);
     var writable_iter = Iterator.Writable.from(&writable_file_ii.interface);
@@ -452,7 +573,7 @@ test Self {
     try testing.expectEqual(slice.len, stat.size);
 
     var readable_vector = Vector.init(&buffer);
-    var readable_file = init(file, &readable_vector.interface, .read, .streaming);
+    var readable_file = init(file, &readable_vector.interface, .{ .read = operation });
     var readable_file_ib = Iterable.init(&readable_file.interface);
     var readable_file_ii = ReadableIterator.init(&readable_file_ib);
     var readable_iter = Iterator.Readable.from(&readable_file_ii.interface);
@@ -467,30 +588,3 @@ test Self {
 
     try testing.expectEqualStrings(slice, &iterated);
 }
-
-pub const Mode = enum {
-    streaming,
-    positional,
-    /// Avoid syscalls other than `read` and `readv`.
-    streaming_reading,
-    /// Avoid syscalls other than `pread` and `preadv`.
-    positional_reading,
-    /// Indicates reading cannot continue because of a seek failure.
-    failure,
-
-    pub fn toStreaming(m: @This()) @This() {
-        return switch (m) {
-            .positional, .streaming => .streaming,
-            .positional_reading, .streaming_reading => .streaming_reading,
-            .failure => .failure,
-        };
-    }
-
-    pub fn toReading(m: @This()) @This() {
-        return switch (m) {
-            .positional, .positional_reading => .positional_reading,
-            .streaming, .streaming_reading => .streaming_reading,
-            .failure => .failure,
-        };
-    }
-};
