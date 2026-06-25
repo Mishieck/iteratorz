@@ -476,17 +476,6 @@ pub const Mode = union(enum) {
         };
     }
 
-    pub fn toReading(self: @This()) @This() {
-        const operation = switch (self) {
-            .read, .write => |op| op.toReading(),
-        };
-
-        return switch (self) {
-            .read => |_| @unionInit(Mode, "read", operation),
-            .write => |_| @unionInit(Mode, "write", operation),
-        };
-    }
-
     pub fn toFailure(self: @This()) @This() {
         return switch (self) {
             .read => |_| @unionInit(Mode, "read", .failure),
@@ -494,53 +483,32 @@ pub const Mode = union(enum) {
         };
     }
 
-    pub const Operation = union(enum) {
-        streaming: ReadWrite,
-        positional: ReadWrite,
+    pub const Operation = enum {
+        streaming,
+        positional,
         /// Indicates reading cannot continue because of a seek failure.
         failure,
 
-        pub const default = Operation{ .streaming = .read_write };
+        pub const default = Operation.streaming;
 
         pub fn toStreaming(self: @This()) @This() {
             return switch (self) {
-                .positional, .streaming => |read_write| switch (read_write) {
-                    .readonly => .{ .streaming = .readonly },
-                    .read_write => .{ .streaming = .read_write },
-                },
-                .failure => .failure,
-            };
-        }
-
-        pub fn toReading(self: @This()) @This() {
-            return switch (self) {
-                .positional => |_| .{ .positional = .readonly },
-                .streaming => |_| .{ .streaming = .readonly },
+                .positional, .streaming => .streaming,
                 .failure => .failure,
             };
         }
 
         pub fn toFailure(self: @This()) @This() {
             return switch (self) {
-                .positional, .streaming, .failure => |_| .failure,
+                .positional, .streaming, .failure => .failure,
             };
         }
-
-        pub const ReadWrite = enum {
-            /// Allow only read system calls.
-            readonly,
-            /// Allow read and write system calls.
-            read_write,
-        };
     };
 };
 
 test Self {
     const Operation = Mode.Operation;
-    const operations = [2]Mode.Operation{
-        Operation{ .streaming = .read_write },
-        Operation{ .positional = .read_write },
-    };
+    const operations = [2]Mode.Operation{ Operation.streaming, Operation.positional };
     for (operations) |op| try testFile(op);
 }
 
