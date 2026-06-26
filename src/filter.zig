@@ -10,6 +10,8 @@ pub fn Readable(BaseIterator: type, predicate: anytype) type {
     return struct {
         const Self = @This();
         pub const Iterator = it.Iterator(BaseIterator.ValueType, BaseIterator.StateType);
+        pub const ValueType = Value;
+        pub const StateType = State;
         pub const Value = Iterator.ValueType;
         pub const State = Iterator.StateType;
         pub const ReadableIterator = Iterator.Readable.Interface;
@@ -95,7 +97,7 @@ pub fn Readable(BaseIterator: type, predicate: anytype) type {
             return iterator;
         }
 
-        pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
+        pub inline fn to(self: *Self, Other: type) it.Infer(Other).Readable {
             return Other.from(self.interface);
         }
     };
@@ -137,6 +139,8 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
     return struct {
         const Self = @This();
         pub const Iterator = it.Iterator(BaseIterator.ValueType, BaseIterator.StateType);
+        pub const ValueType = Value;
+        pub const StateType = State;
         pub const Value = Iterator.ValueType;
         pub const State = Iterator.StateType;
         pub const WritableIterator = Iterator.Writable.Interface;
@@ -222,7 +226,7 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
             return iterator;
         }
 
-        pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
+        pub inline fn to(self: *Self, Other: type) it.Infer(Other).Writable {
             return Other.from(self.interface);
         }
     };

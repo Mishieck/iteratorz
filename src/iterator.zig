@@ -66,7 +66,7 @@ pub fn Iterator(Value: type, State: type) type {
                 return self;
             }
 
-            pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
+            pub inline fn to(self: *Self, Other: type) *Infer(Other).Readable {
                 return Other.from(self.interface);
             }
         };
@@ -131,11 +131,15 @@ pub fn Iterator(Value: type, State: type) type {
                 return self;
             }
 
-            pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
+            pub inline fn to(self: *Self, Other: type) *Infer(Other).Writable {
                 return Other.from(self.interface);
             }
         };
     };
+}
+
+pub fn Infer(It: type) type {
+    return Iterator(It.ValueType, It.StateType);
 }
 
 test Iterator {

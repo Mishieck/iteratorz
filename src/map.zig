@@ -11,6 +11,8 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
         const Self = @This();
         const ReturnType = @typeInfo(@TypeOf(map)).@"fn".return_type.?;
         pub const BaseValue = BaseIterator.ValueType;
+        pub const ValueType = Value;
+        pub const StateType = State;
         pub const Value = @typeInfo(ReturnType).error_union.payload;
         pub const State = BaseIterator.StateType;
         pub const Iterator = it.Iterator(Value, State);
@@ -88,10 +90,6 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
         }
-
-        pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
-            return Other.from(self.interface);
-        }
     };
 }
 
@@ -125,6 +123,8 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
     return struct {
         const Self = @This();
         pub const BaseValue = BaseIterator.ValueType;
+        pub const ValueType = Value;
+        pub const StateType = State;
         pub const Value = @typeInfo(@TypeOf(map)).@"fn".params[0].type.?;
         pub const State = BaseIterator.StateType;
         pub const Iterator = it.Iterator(Value, State);
@@ -201,10 +201,6 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
-        }
-
-        pub inline fn to(self: *Self, Other: type) @typeInfo(@TypeOf(Other.from)).@"fn".return_type.? {
-            return Other.from(self.interface);
         }
     };
 }
