@@ -4,6 +4,9 @@ const testing = std.testing;
 pub fn Iterator(Value: type, State: type) type {
     return struct {
         pub const ValueType = Value;
+
+        /// The state of the iterator. The state value must have valid and
+        /// invalid variants the state.
         pub const StateType = State;
 
         pub const Readable = struct {
@@ -12,18 +15,43 @@ pub fn Iterator(Value: type, State: type) type {
             pub const Interface = struct {
                 const It = @This();
 
+                /// Gets the value at the previous state. It sets the state to
+                /// the previous value before getting the `Value`, If the new
+                /// state is invalid, it returns `null`.
                 previous: *const fn (iterator: *It) anyerror!?Value,
+
+                /// Gets the value at the current state. It sets the state to
+                /// the next value after getting the `Value`. If the current
+                /// state is invalid, it returns `null`.
                 current: *const fn (iterator: *It) anyerror!?Value,
+
+                /// Gets the value at the next state. It sets the state to the
+                /// next value before getting the `Value`, If the new state is
+                /// invalid, it returns `null`.
                 next: *const fn (iterator: *It) anyerror!?Value,
+
+                /// Gets the value at the given `state`. It sets the state to
+                /// the next value after getting the `Value`. If the `state` is
+                /// invalid, it returns null after setting the state.
                 at: *const fn (iterator: *It, state: State) anyerror!?Value,
+
+                /// Gets the current state. The returned `State` may be invalid.
                 getState: *const fn (iterator: *It) anyerror!State,
+
+                /// Sets the current state. If the `state` is invalid, it
+                /// returns `error.InvalidState` after setting the state.
                 setState: *const fn (iterator: *It, state: State) anyerror!*It,
+
+                /// Sets the value of the state to the initial value.
                 setInitialState: *const fn (iterator: *It) anyerror!*It,
+
+                /// Sets the value of the state to the final value.
                 setFinalState: *const fn (iterator: *It) anyerror!*It,
             };
 
             interface: *Interface,
 
+            /// Creates an iterator from the interface of another iterator.
             pub inline fn from(int: *Interface) *Self {
                 return @constCast(&Self.init(int));
             }
@@ -77,13 +105,37 @@ pub fn Iterator(Value: type, State: type) type {
             pub const Interface = struct {
                 const It = @This();
 
+                /// Sets the value at the previous state. It sets the state to
+                /// the previous value before setting the `Value`, If the new
+                /// state is invalid, it returns `null`.
                 previous: *const fn (iterator: *It, value: Value) anyerror!?*It,
+
+                /// Sets the value at the current state. It sets the state to
+                /// the next value after setting the `Value`. If the current
+                /// state is invalid, it returns `null`.
                 current: *const fn (iterator: *It, value: Value) anyerror!?*It,
+
+                /// Sets the value at the next state. It sets the state to the
+                /// next value before setting the `Value`, If the new state is
+                /// invalid, it returns `null`.
                 next: *const fn (iterator: *It, value: Value) anyerror!?*It,
+
+                /// Sets the value at the given `state`. It sets the state to
+                /// the next value after setting the `Value`. If the `state` is
+                /// invalid, it returns null after setting the state.
                 at: *const fn (iterator: *It, state: State, value: Value) anyerror!?*It,
+
+                /// Gets the current state. The returned `State` may be invalid.
                 getState: *const fn (iterator: *It) anyerror!State,
+
+                /// Sets the current state. If the `state` is invalid, it
+                /// returns `error.InvalidState` after setting the state.
                 setState: *const fn (iterator: *It, state: State) anyerror!*It,
+
+                /// Sets the value of the state to the initial value.
                 setInitialState: *const fn (iterator: *It) anyerror!*It,
+
+                /// Sets the value of the state to the final value.
                 setFinalState: *const fn (iterator: *It) anyerror!*It,
             };
 
