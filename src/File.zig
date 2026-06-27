@@ -22,7 +22,6 @@ const testing = std.testing;
 const ib = @import("iterable.zig");
 const vec = @import("vector.zig");
 const it = @import("iterator.zig");
-const ii = @import("iterable_iterator.zig");
 
 const Self = @This();
 pub const Value = u8;
@@ -513,9 +512,6 @@ test Self {
 }
 
 fn testFile(operation: Mode.Operation) !void {
-    const FileIbIt = ii.IterableIterator(Value, State);
-    const ReadableIterator = FileIbIt.Readable;
-    const WritableIterator = FileIbIt.Writable;
     const Iterator = it.Iterator(Value, State);
 
     var tmp_dir = testing.tmpDir(.{});
@@ -529,8 +525,8 @@ fn testFile(operation: Mode.Operation) !void {
     var writable_vector = Vector.init(&buffer);
     var writable_file = init(file, &writable_vector.interface, .{ .write = operation });
     var writable_file_ib = Iterable.init(&writable_file.interface);
-    var writable_file_ii = WritableIterator.init(&writable_file_ib);
-    var writable_iter = Iterator.Writable.from(&writable_file_ii.interface);
+    var writable_file_interface = Iterator.Writable.Default.init(&writable_file_ib);
+    var writable_iter = Iterator.Writable.This.init(&writable_file_interface.interface);
 
     for (slice) |char| _ = try writable_iter.current(char);
     try testing.expectEqualStrings(slice, &buffer);
@@ -543,8 +539,8 @@ fn testFile(operation: Mode.Operation) !void {
     var readable_vector = Vector.init(&buffer);
     var readable_file = init(file, &readable_vector.interface, .{ .read = operation });
     var readable_file_ib = Iterable.init(&readable_file.interface);
-    var readable_file_ii = ReadableIterator.init(&readable_file_ib);
-    var readable_iter = Iterator.Readable.from(&readable_file_ii.interface);
+    var readable_file_interface = Iterator.Readable.Default.init(&readable_file_ib);
+    var readable_iter = Iterator.Readable.This.init(&readable_file_interface.interface);
 
     var iterated: [slice.len]u8 = undefined;
 

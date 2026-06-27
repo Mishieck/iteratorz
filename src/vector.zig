@@ -2,7 +2,6 @@ const std = @import("std");
 const testing = std.testing;
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
-const ii = @import("iterable_iterator.zig");
 
 pub fn Vector(Value: type) type {
     return struct {
@@ -112,17 +111,14 @@ pub fn Vector(Value: type) type {
 test Vector {
     const Bytes = Vector(u8);
     const Iterable = ib.Iterable(u8, State);
-    const BytesIbIt = ii.IterableIterator(Bytes.ValueType, Bytes.StateType);
-    const ReadableIterator = BytesIbIt.Readable;
-    const WritableIterator = BytesIbIt.Writable;
     const Iterator = it.Iterator(Bytes.ValueType, Bytes.StateType);
 
     const slice: []u8 = @constCast("hello");
 
     var readable_bytes = Bytes.init(slice);
     var readable_ib = Iterable.init(&readable_bytes.interface);
-    var readable_bytes_ii = ReadableIterator.init(&readable_ib);
-    var readable_iter = Iterator.Readable.from(&readable_bytes_ii.interface);
+    var readable_interface = Iterator.Readable.Default.init(&readable_ib);
+    var readable_iter = Iterator.Readable.This.init(&readable_interface.interface);
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
@@ -136,8 +132,8 @@ test Vector {
     var buffer: [slice.len]u8 = undefined;
     var writable_bytes = Bytes.init(&buffer);
     var writable_ib = Iterable.init(&writable_bytes.interface);
-    var writable_bytes_ii = WritableIterator.init(&writable_ib);
-    var writable_iter = Iterator.Writable.from(&writable_bytes_ii.interface);
+    var writable_interface = Iterator.Writable.Default.init(&writable_ib);
+    var writable_iter = Iterator.Writable.This.init(&writable_interface.interface);
 
     for (slice) |char| _ = try writable_iter.current(char);
     try testing.expectEqualStrings(slice, &buffer);

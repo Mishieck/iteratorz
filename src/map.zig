@@ -4,7 +4,6 @@ const testing = std.testing;
 const vector = @import("vector.zig");
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
-const ii = @import("iterable_iterator.zig");
 
 pub fn Readable(BaseIterator: type, map: anytype) type {
     return struct {
@@ -23,9 +22,9 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
         interface: ReadableIterator,
         base_iterator: *ReadableIterator,
 
-        pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable {
+        pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable.This {
             var self: Self = .init(base_iterator);
-            return Iterator.Readable.from(&self.interface);
+            return @constCast(&Iterator.Readable.This.init(&self.interface));
         }
 
         pub fn init(base_iterator: *ReadableIterator) Self {
@@ -97,7 +96,6 @@ test Readable {
     const Value = u8;
     const State = vector.State;
     const Vec = vector.Vector(Value);
-    const IbIt = ii.IterableIterator(Value, State);
     const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
 
@@ -105,8 +103,8 @@ test Readable {
     const capitalized = "HELLO";
     var vec = Vec.init(slice);
     var vec_ib = Ib.init(&vec.interface);
-    var ib_it = IbIt.Readable.init(&vec_ib);
-    var iter = It.Readable.init(&ib_it.interface);
+    var int = It.Readable.Default.init(&vec_ib);
+    var iter = It.Readable.This.init(&int.interface);
     var m = iter.to(Readable(It, capitalize));
     var iterated: [slice.len]u8 = undefined;
 
@@ -135,9 +133,9 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
         interface: WritableIterator,
         base_iterator: *WritableIterator,
 
-        pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable {
+        pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable.This {
             var self: Self = .init(base_iterator);
-            return Iterator.Writable.from(&self.interface);
+            return @constCast(&Iterator.Writable.This.init(&self.interface));
         }
 
         pub fn init(base_iterator: *WritableIterator) Self {
@@ -211,15 +209,14 @@ test Writable {
     const Vec = vector.Vector(Value);
     const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
-    const IbIt = ii.IterableIterator(Value, State);
 
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
     var buffer: [slice.len]u8 = undefined;
     var vec = Vec.init(&buffer);
     var vec_ib = Ib.init(&vec.interface);
-    var ib_it = IbIt.Writable.init(&vec_ib);
-    var iter = It.Writable.init(&ib_it.interface);
+    var int = It.Writable.Default.init(&vec_ib);
+    var iter = It.Writable.This.init(&int.interface);
     var m = iter.to(Writable(It, capitalize));
 
     for (slice) |char| _ = try m.current(char);

@@ -1,191 +1,358 @@
 const std = @import("std");
 const testing = std.testing;
+const ib = @import("iterable.zig");
+const it = @import("iterator.zig");
 
 pub fn Iterator(Value: type, State: type) type {
     return struct {
         pub const ValueType = Value;
-
-        /// The state of the iterator. The state value must have valid and
-        /// invalid variants the state.
         pub const StateType = State;
 
+        const Iterable = ib.Iterable(Value, State);
+
         pub const Readable = struct {
-            const Self = @This();
-
             pub const Interface = struct {
-                const It = @This();
-
                 /// Gets the value at the previous state. It sets the state to
                 /// the previous value before getting the `Value`, If the new
                 /// state is invalid, it returns `null`.
-                previous: *const fn (iterator: *It) anyerror!?Value,
+                previous: *const fn (iterator: *Interface) anyerror!?Value,
 
                 /// Gets the value at the current state. It sets the state to
                 /// the next value after getting the `Value`. If the current
                 /// state is invalid, it returns `null`.
-                current: *const fn (iterator: *It) anyerror!?Value,
+                current: *const fn (iterator: *Interface) anyerror!?Value,
 
                 /// Gets the value at the next state. It sets the state to the
                 /// next value before getting the `Value`, If the new state is
                 /// invalid, it returns `null`.
-                next: *const fn (iterator: *It) anyerror!?Value,
+                next: *const fn (iterator: *Interface) anyerror!?Value,
 
                 /// Gets the value at the given `state`. It sets the state to
                 /// the next value after getting the `Value`. If the `state` is
                 /// invalid, it returns null after setting the state.
-                at: *const fn (iterator: *It, state: State) anyerror!?Value,
+                at: *const fn (iterator: *Interface, state: State) anyerror!?Value,
 
                 /// Gets the current state. The returned `State` may be invalid.
-                getState: *const fn (iterator: *It) anyerror!State,
+                getState: *const fn (iterator: *Interface) anyerror!State,
 
                 /// Sets the current state. If the `state` is invalid, it
                 /// returns `error.InvalidState` after setting the state.
-                setState: *const fn (iterator: *It, state: State) anyerror!*It,
+                setState: *const fn (iterator: *Interface, state: State) anyerror!*Interface,
 
                 /// Sets the value of the state to the initial value.
-                setInitialState: *const fn (iterator: *It) anyerror!*It,
+                setInitialState: *const fn (iterator: *Interface) anyerror!*Interface,
 
                 /// Sets the value of the state to the final value.
-                setFinalState: *const fn (iterator: *It) anyerror!*It,
+                setFinalState: *const fn (iterator: *Interface) anyerror!*Interface,
             };
 
-            interface: *Interface,
+            pub const Default = struct {
+                const Self = @This();
 
-            /// Creates an iterator from the interface of another iterator.
-            pub inline fn from(int: *Interface) *Self {
-                return @constCast(&Self.init(int));
-            }
+                interface: Interface,
+                iterable: *Iterable,
 
-            pub fn init(interface: *Interface) Self {
-                return .{ .interface = interface };
-            }
+                pub fn init(iterable: *Iterable) Self {
+                    return .{
+                        .interface = .{
+                            .previous = previous,
+                            .current = current,
+                            .next = next,
+                            .at = at,
+                            .getState = getState,
+                            .setState = setState,
+                            .setInitialState = setInitialState,
+                            .setFinalState = setFinalState,
+                        },
+                        .iterable = iterable,
+                    };
+                }
 
-            pub fn previous(self: *Self) anyerror!?Value {
-                return self.interface.previous(self.interface);
-            }
+                fn previous(iterator: *Interface) anyerror!?Value {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setPreviousState() catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    return try self.iterable.getValue();
+                }
 
-            pub fn current(self: *Self) anyerror!?Value {
-                return self.interface.current(self.interface);
-            }
+                fn current(iterator: *Interface) anyerror!?Value {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    if (!try self.iterable.isStateValid()) return null;
+                    const value = try self.iterable.getValue();
+                    _ = self.iterable.setNextState() catch |err| {
+                        if (err != error.InvalidState) return err;
+                    };
+                    return value;
+                }
 
-            pub fn next(self: *Self) anyerror!?Value {
-                return self.interface.next(self.interface);
-            }
+                fn next(iterator: *Interface) anyerror!?Value {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setNextState() catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    const value = try self.iterable.getValue();
+                    return value;
+                }
 
-            pub fn at(self: *Self) anyerror!?Value {
-                return self.interface.next(self.interface);
-            }
+                fn at(iterator: *Interface, state: State) anyerror!?Value {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setState(state) catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    const value = try self.iterable.getValue();
+                    _ = self.iterable.setNextState() catch |err| {
+                        if (err != error.InvalidState) return err;
+                    };
+                    return value;
+                }
 
-            pub fn getState(self: *Self) anyerror!State {
-                return self.interface.getState(self.interface);
-            }
+                fn getState(iterator: *Interface) anyerror!State {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    return self.iterable.getState();
+                }
 
-            pub fn setState(self: *Self, state: State) anyerror!State {
-                return self.interface.setState(self.interface, state);
-            }
+                fn setState(iterator: *Interface, state: State) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setState(state);
+                    return iterator;
+                }
 
-            pub fn setInitialState(self: *Self) anyerror!*Self {
-                _ = try self.interface.setInitialState(self.interface);
-                return self;
-            }
+                fn setInitialState(iterator: *Interface) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setInitialState();
+                    return iterator;
+                }
 
-            pub fn setFinalState(self: *Self) anyerror!*Self {
-                _ = try self.interface.setFinalState(self.interface);
-                return self;
-            }
+                fn setFinalState(iterator: *Interface) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setFinalState();
+                    return iterator;
+                }
+            };
 
-            pub inline fn to(self: *Self, Other: type) *Infer(Other).Readable {
-                return Other.from(self.interface);
-            }
+            pub const This = struct {
+                const Self = @This();
+
+                interface: *Interface,
+
+                pub fn init(interface: *Interface) Self {
+                    return .{ .interface = interface };
+                }
+
+                pub fn previous(self: *Self) anyerror!?Value {
+                    return try self.interface.previous(self.interface);
+                }
+
+                pub fn current(self: *Self) anyerror!?Value {
+                    return self.interface.current(self.interface);
+                }
+
+                pub fn next(self: *Self) anyerror!?Value {
+                    return self.interface.next(self.interface);
+                }
+
+                pub fn at(self: *Self, state: State) anyerror!?Value {
+                    return self.interface.at(self.interface, state);
+                }
+
+                pub fn getState(self: *Self) anyerror!State {
+                    return self.interface.getState();
+                }
+
+                pub fn setState(self: *Self, state: State) anyerror!State {
+                    return self.interface.setState(self, state);
+                }
+
+                pub fn setInitialState(self: *Self) anyerror!*Self {
+                    _ = try self.interface.setInitialState(self);
+                    return self;
+                }
+
+                pub fn setFinalState(self: *Self) anyerror!*Self {
+                    _ = try self.interface.setFinalState(self);
+                    return self;
+                }
+
+                pub inline fn to(self: *Self, Other: type) *Infer(Other).Readable.This {
+                    return Other.from(self.interface);
+                }
+            };
         };
 
         pub const Writable = struct {
-            const Self = @This();
-
             pub const Interface = struct {
-                const It = @This();
-
                 /// Sets the value at the previous state. It sets the state to
                 /// the previous value before setting the `Value`, If the new
                 /// state is invalid, it returns `null`.
-                previous: *const fn (iterator: *It, value: Value) anyerror!?*It,
+                previous: *const fn (iterator: *Interface, value: Value) anyerror!?*Interface,
 
                 /// Sets the value at the current state. It sets the state to
                 /// the next value after setting the `Value`. If the current
                 /// state is invalid, it returns `null`.
-                current: *const fn (iterator: *It, value: Value) anyerror!?*It,
+                current: *const fn (iterator: *Interface, value: Value) anyerror!?*Interface,
 
                 /// Sets the value at the next state. It sets the state to the
                 /// next value before setting the `Value`, If the new state is
                 /// invalid, it returns `null`.
-                next: *const fn (iterator: *It, value: Value) anyerror!?*It,
+                next: *const fn (iterator: *Interface, value: Value) anyerror!?*Interface,
 
                 /// Sets the value at the given `state`. It sets the state to
                 /// the next value after setting the `Value`. If the `state` is
                 /// invalid, it returns null after setting the state.
-                at: *const fn (iterator: *It, state: State, value: Value) anyerror!?*It,
+                at: *const fn (iterator: *Interface, state: State, value: Value) anyerror!?*Interface,
 
                 /// Gets the current state. The returned `State` may be invalid.
-                getState: *const fn (iterator: *It) anyerror!State,
+                getState: *const fn (iterator: *Interface) anyerror!State,
 
                 /// Sets the current state. If the `state` is invalid, it
                 /// returns `error.InvalidState` after setting the state.
-                setState: *const fn (iterator: *It, state: State) anyerror!*It,
+                setState: *const fn (iterator: *Interface, state: State) anyerror!*Interface,
 
                 /// Sets the value of the state to the initial value.
-                setInitialState: *const fn (iterator: *It) anyerror!*It,
+                setInitialState: *const fn (iterator: *Interface) anyerror!*Interface,
 
                 /// Sets the value of the state to the final value.
-                setFinalState: *const fn (iterator: *It) anyerror!*It,
+                setFinalState: *const fn (iterator: *Interface) anyerror!*Interface,
             };
 
-            interface: *Interface,
+            pub const Default = struct {
+                const Self = @This();
 
-            pub inline fn from(int: *Interface) *Self {
-                return @constCast(&Self.init(int));
-            }
+                interface: Interface,
+                iterable: *Iterable,
 
-            pub fn init(interface: *Interface) Self {
-                return .{ .interface = interface };
-            }
+                pub fn init(iterable: *Iterable) Self {
+                    return .{
+                        .interface = .{
+                            .previous = previous,
+                            .current = current,
+                            .next = next,
+                            .at = at,
+                            .getState = getState,
+                            .setState = setState,
+                            .setInitialState = setInitialState,
+                            .setFinalState = setFinalState,
+                        },
+                        .iterable = iterable,
+                    };
+                }
 
-            pub fn previous(self: *Self, value: Value) anyerror!?*Self {
-                return if (try self.interface.previous(self.interface, value)) |_| self else null;
-            }
+                fn previous(iterator: *Interface, value: Value) anyerror!?*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setPreviousState() catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    _ = try self.iterable.setValue(value);
+                    return iterator;
+                }
 
-            pub fn current(self: *Self, value: Value) anyerror!?*Self {
-                return if (try self.interface.current(self.interface, value)) |_| self else null;
-            }
+                fn current(iterator: *Interface, value: Value) anyerror!?*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    if (!try self.iterable.isStateValid()) return null;
+                    _ = try self.iterable.setValue(value);
+                    _ = self.iterable.setNextState() catch |err| {
+                        if (err != error.InvalidState) return err;
+                    };
+                    return iterator;
+                }
 
-            pub fn next(self: *Self, value: Value) anyerror!?*Self {
-                return if (try self.interface.next(self.interface, value)) |_| self else null;
-            }
+                fn next(iterator: *Interface, value: Value) anyerror!?*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setNextState() catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    _ = try self.iterable.setValue(value);
+                    return iterator;
+                }
 
-            pub fn at(self: *Self, state: State, value: Value) anyerror!?*Self {
-                return if (try self.interface.at(self.interface, state, value)) |_| self else null;
-            }
+                fn at(iterator: *Interface, state: State, value: Value) anyerror!?*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = self.iterable.setState(state) catch |err| {
+                        return if (err == error.InvalidState) null else err;
+                    };
+                    _ = try self.iterable.setValue(value);
+                    _ = self.iterable.setNextState() catch |err| {
+                        if (err != error.InvalidState) return err;
+                    };
+                    return iterator;
+                }
 
-            pub fn getState(self: *Self) anyerror!State {
-                return self.interface.getState(self.interface);
-            }
+                fn getState(iterator: *Interface) anyerror!State {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    return self.iterable.getState();
+                }
 
-            pub fn setState(self: *Self, state: State) anyerror!State {
-                return self.interface.setState(self.interface, state);
-            }
+                fn setState(iterator: *Interface, state: State) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setState(state);
+                    return iterator;
+                }
 
-            pub fn setInitialState(self: *Self) anyerror!*Self {
-                _ = try self.interface.setInitialState(self.interface);
-                return self;
-            }
+                fn setInitialState(iterator: *Interface) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setInitialState();
+                    return iterator;
+                }
 
-            pub fn setFinalState(self: *Self) anyerror!*Self {
-                _ = try self.interface.setFinalState(self.interface);
-                return self;
-            }
+                fn setFinalState(iterator: *Interface) anyerror!*Interface {
+                    var self: *Self = @fieldParentPtr("interface", iterator);
+                    _ = try self.iterable.setFinalState();
+                    return iterator;
+                }
+            };
 
-            pub inline fn to(self: *Self, Other: type) *Infer(Other).Writable {
-                return Other.from(self.interface);
-            }
+            pub const This = struct {
+                const Self = @This();
+
+                interface: *Interface,
+
+                pub fn init(interface: *Interface) Self {
+                    return .{ .interface = interface };
+                }
+
+                pub fn previous(self: *Self, value: Value) anyerror!?*Self {
+                    _ = try self.interface.previous(self.interface, value);
+                    return self;
+                }
+
+                pub fn current(self: *Self, value: Value) anyerror!?*Self {
+                    _ = try self.interface.current(self.interface, value);
+                    return self;
+                }
+
+                pub fn next(self: *Self, value: Value) anyerror!?*Self {
+                    _ = try self.interface.next(self.interface, value);
+                    return self;
+                }
+
+                pub fn at(self: *Self, state: State, value: Value) anyerror!?*Self {
+                    _ = try self.interface.at(self.interface, state, value);
+                    return self;
+                }
+
+                pub fn getState(self: *Self) anyerror!State {
+                    return self.interface.getState(self);
+                }
+
+                pub fn setState(self: *Self, state: State) anyerror!State {
+                    return self.interface.setState(self, state);
+                }
+
+                pub fn setInitialState(self: *Self) anyerror!*Self {
+                    _ = try self.interface.setInitialState(self);
+                    return self;
+                }
+
+                pub fn setFinalState(self: *Self) anyerror!*Self {
+                    _ = try self.interface.setFinalState(self);
+                    return self;
+                }
+
+                pub inline fn to(self: *Self, Other: type) *Infer(Other).Writable.This {
+                    return Other.from(self.interface);
+                }
+            };
         };
     };
 }

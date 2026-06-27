@@ -2,7 +2,6 @@ const std = @import("std");
 const testing = std.testing;
 
 const ib = @import("iterable.zig");
-const ii = @import("iterable_iterator.zig");
 const vector = @import("vector.zig");
 const it = @import("iterator.zig");
 
@@ -21,9 +20,9 @@ pub fn Readable(BaseIterator: type, predicate: anytype) type {
         interface: ReadableIterator,
         base_iterator: *ReadableIterator,
 
-        pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable {
+        pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable.This {
             var self: Self = .init(base_iterator);
-            return Iterator.Readable.from(&self.interface);
+            return @constCast(&Iterator.Readable.This.init(&self.interface));
         }
 
         pub fn init(base_iterator: *ReadableIterator) Self {
@@ -109,14 +108,13 @@ test Readable {
     const Vec = vector.Vector(Value);
     const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
-    const IbIt = ii.IterableIterator(Value, State);
 
     const slice: []Vec.ValueType = @constCast("hello");
     const vowels = "eo";
     var vec = Vec.init(slice);
     var vec_ib = Ib.init(&vec.interface);
-    var ib_it = IbIt.Readable.init(&vec_ib);
-    var iter = It.Readable.init(&ib_it.interface);
+    var int = It.Readable.Default.init(&vec_ib);
+    var iter = It.Readable.This.init(&int.interface);
     var f = iter.to(Readable(It, isVowel));
     var iterated: [slice.len]u8 = undefined;
 
@@ -150,9 +148,9 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
         interface: WritableIterator,
         base_iterator: *WritableIterator,
 
-        pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable {
+        pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable.This {
             var self: Self = .init(base_iterator);
-            return Iterator.Writable.from(&self.interface);
+            return @constCast(&Iterator.Writable.This.init(&self.interface));
         }
 
         pub fn init(base_iterator: *WritableIterator) Self {
@@ -238,15 +236,14 @@ test Writable {
     const Vec = vector.Vector(Value);
     const Ib = ib.Iterable(Value, State);
     const It = it.Iterator(Value, State);
-    const IbIt = ii.IterableIterator(Value, State);
 
     const slice: []Value = @constCast("hello");
     const vowels = "eo";
     var buffer: [slice.len]u8 = undefined;
     var vec = Vec.init(&buffer);
     var vec_ib = Ib.init(&vec.interface);
-    var ib_it = IbIt.Writable.init(&vec_ib);
-    var iter = It.Writable.init(&ib_it.interface);
+    var int = It.Writable.Default.init(&vec_ib);
+    var iter = It.Writable.This.init(&int.interface);
     var f = iter.to(Writable(It, isVowel));
 
     for (slice) |char| _ = try f.current(char);
