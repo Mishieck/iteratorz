@@ -63,7 +63,7 @@ pub fn readPositional(self: *Self, index: usize, buffer: Vector.Vec) anyerror!us
             self.mode = self.mode.toStreaming();
 
             if (index != 0) {
-                _ = self.seekBy(@intCast(index)) catch {
+                _ = self.seekTo(@intCast(index)) catch {
                     self.mode = self.mode.toFailure();
                     return error.ReadFailed;
                 };
@@ -120,6 +120,7 @@ pub fn writePositional(self: *Self, index: usize, buffer: []const u8) anyerror!*
         },
         else => return error.CommitFailed,
     };
+
     return self;
 }
 
@@ -130,47 +131,7 @@ pub fn writeStreaming(self: *Self, index: usize, buffer: []const u8) anyerror!*S
 
     if (is_windows) {
         _ = windows.WriteFile(handle, buffer, null) catch return error.WriteFailed;
-        return self;
-    }
-
-    _ = std.posix.write(handle, buffer) catch return error.CommitFailed;
-    return self;
-}
-
-pub fn seekBy(self: *Self, offset: usize) anyerror!*Self {
-    switch (self.mode) {
-        .read, .write => |operation| switch (operation) {
-            .positional => |_| _ = try self.setPosAdjustingBuffer(@intCast(offset)),
-            .streaming => |_| {
-                if (posix.SEEK == void) return error.Unseekable;
-
-                const seek_err = e: {
-                    if (posix.lseek_CUR(self.file.handle, @as(i64, @intCast(@as(u64, @bitCast(offset)))))) |_| {
-                        _ = try self.setPosAdjustingBuffer(@intCast(offset));
-                        return self;
-                    } else |err| break :e err;
-                };
-                var remaining = std.math.cast(u64, offset) orelse return seek_err;
-                while (remaining > 0) {
-                    remaining -= try self.discard(offset, .limited64(remaining));
-                }
-            },
-            .failure => return error.Unseekable,
-        },
-    }
-
-    return self;
-}
-
-fn setPosAdjustingBuffer(self: *Self, offset: u64) anyerror!*Self {
-    _ = offset;
-    // if (offset < logical_pos or offset >= self.index.valid) {
-    //     _ = try iterable.setInitialState(iterable);
-    //     self.index = .{ .valid = offset };
-    // } else {
-    //     const logical_delta: usize = @intCast(offset - logical_pos);
-    //     _ = try iterable.setState(iterable, .{ .valid = self.index.valid + logical_delta });
-    // }
+    } else _ = std.posix.write(handle, buffer) catch return error.CommitFailed;
 
     return self;
 }
@@ -178,7 +139,7 @@ fn setPosAdjustingBuffer(self: *Self, offset: u64) anyerror!*Self {
 pub fn seekTo(self: *Self, index: usize) anyerror!*Self {
     return switch (self.mode) {
         .read, .write => |operation| switch (operation) {
-            .positional => |_| self,
+            .positional => unreachable,
             .streaming => |_| s: {
                 try posix.lseek_SET(self.file.handle, @bitCast(index));
                 break :s self;
@@ -188,29 +149,6 @@ pub fn seekTo(self: *Self, index: usize) anyerror!*Self {
     };
 }
 
-fn discard(self: *Self, index: usize, limit: std.Io.Limit) anyerror!usize {
-    const file = self.file;
-    switch (self.mode) {
-        .read, .write => |operation| switch (operation) {
-            .positional => |_| {
-                const s = self.getSize() catch {
-                    self.mode = self.mode.toStreaming();
-                    return 0;
-                };
-                const delta = @min(@intFromEnum(limit), s - index);
-                return delta;
-            },
-            .streaming => |_| {
-                const s = self.getSize() catch return 0;
-                const n = @min(s - index, maxInt(i64), @intFromEnum(limit));
-                file.seekBy(@intCast(n)) catch return 0;
-                return n;
-            },
-            .failure => return error.ReadFailed,
-        },
-    }
-}
-
 pub fn getSize(self: *Self) anyerror!usize {
     var collection = &self.interface;
     return @bitCast(try collection.size(&self.interface));
@@ -218,11 +156,7 @@ pub fn getSize(self: *Self) anyerror!usize {
 
 pub fn size(collection: *Collection) anyerror!usize {
     const self: *Self = @fieldParentPtr("interface", collection);
-
-    if (is_windows) {
-        if (windows.GetFileSizeEx(self.file.handle)) |s| s else |err| return err;
-    }
-
+    if (is_windows) return if (windows.GetFileSizeEx(self.file.handle)) |s| @truncate(s) else |err| err;
     if (posix.Stat == void) return error.Streaming;
 
     if (self.file.stat()) |stat| {
