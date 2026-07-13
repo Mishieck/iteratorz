@@ -107,7 +107,37 @@ even numbers up to 100, you could take the following steps:
 
 In mathematical terms, it is:
 
-$$
-\text{let } \text{Even} = \{2x| x \in \mathbb{W}\} \\
-\text{let } \text{UpTo100} = \{x| x \in \text{Even} \land x \le 100\}
-$$
+<div style="margin-bottom: 15px;">
+  <math display="block">
+    <mtext>Even</mtext>
+    <mo>:=</mo>
+    <mo>{</mo>
+    <mrow>
+      <mn>2</mn>
+      <mi>x</mi>
+    </mrow>
+    <mo fence="true">|</mo> 
+    <mi>x</mi> 
+    <mo>∈</mo> 
+    <mi>𝕎</mi>
+    <mo>}</mo> 
+  </math>
+</div>
+
+<div>
+  <math display="block">
+    <mtext>UpTo100</mtext> 
+    <mo>:=</mo> 
+    <mo>{</mo>
+    <mi>x</mi>
+    <mo fence="true">|</mo> 
+    <mi>x</mi> 
+    <mo>∈</mo> 
+    <mtext>Even</mtext> 
+    <mo>∧</mo> 
+    <mi>x</mi> 
+    <mo>≤</mo> 
+    <mn>100</mn>
+    <mo>}</mo>
+  </math>
+</div>
