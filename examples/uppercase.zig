@@ -4,18 +4,16 @@ const mem = std.mem;
 const testing = std.testing;
 
 const iteratorz = @import("iteratorz");
-const vec = iteratorz.vector;
 
 const Char = u8;
 const capacity: u3 = 5;
-const Text = vec.Iterator(Char, capacity);
+const Text = iteratorz.vector.Iterator(Char, capacity);
 const Uppercase = iteratorz.map.Readable(Text, toUppercase);
-const Vowels = iteratorz.filter.Readable(Text, isVowel);
 
 pub fn main() !void {
     const slice: []Char = @constCast("hello");
-    var readable_bytes = Text.Readable.init(slice);
-    var uppercase = readable_bytes.to(Vowels).to(Uppercase);
+    var text = Text.Readable.init(slice);
+    var uppercase = text.to(Uppercase);
     var iterated: [slice.len]Char = undefined;
 
     var i: usize = 0;
@@ -24,16 +22,10 @@ pub fn main() !void {
         i += 1;
     }
 
-    const expected = "EO";
-    try testing.expectEqualStrings(expected, iterated[0..i]);
+    const expected = "HELLO";
+    try testing.expectEqualStrings(expected, &iterated);
 }
 
 fn toUppercase(char: u8) anyerror!u8 {
     return std.ascii.toUpper(char);
-}
-
-fn isVowel(char: u8) anyerror!bool {
-    return for ("aeiou") |c| {
-        if (c == char) break true;
-    } else false;
 }

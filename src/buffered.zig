@@ -3,250 +3,175 @@ const std = @import("std");
 const debug = std.debug;
 const testing = std.testing;
 
+const in = @import("indexable.zig");
 const ib = @import("iterable.zig");
+const it = @import("iterator.zig");
 const vec = @import("vector.zig");
+const scalar = @import("scalar.zig");
 
-pub const State = vec.State;
+pub const Mode = in.Mode;
 
-pub fn Buffered(Value: type) type {
+pub fn Iterator(Value: type, comptime capacity: anytype, comptime buffer_capacity: anytype) type {
     return struct {
-        const Self = @This();
-        const Iterable = ib.Iterable(Value, State);
-        pub const Interface = Iterable.Interface;
-        pub const Vector = vec.Vector(Value);
+        pub const BufIn = Indexable(Value, capacity, buffer_capacity);
+        const InIt = in.Iterator(Value, capacity);
+        const Ib = ib.Iterable(Value, State);
+        const It = it.Iterator(Value, State);
+        const In = in.Collection(Value, buffer_capacity);
+        const State = InIt.StateType;
+        pub const StateType = State;
 
-        interface: Interface,
-        collection: *Collection,
-        collection_size: ?usize = null,
-        buffer: Iterable,
-        buffered_size: u64 = 0,
-        mode: Mode,
-        index: State = .{ .valid = 0 },
-
-        pub fn init(collection: *Collection, buffer: *Interface, mode: Mode) Self {
-            return .{
-                .interface = .{
-                    .getValue = getValue,
-                    .setValue = setValue,
-                    .getState = getState,
-                    .setState = setState,
-                    .setNextState = setNextState,
-                    .setPreviousState = setPreviousState,
-                    .setInitialState = setInitialState,
-                    .setFinalState = setFinalState,
-                    .isStateValid = isStateValid,
-                },
-                .collection = collection,
-                .mode = mode,
-                .buffer = .init(buffer),
-            };
-        }
-
-        pub fn getValue(iterable: *Interface) anyerror!Value {
-            const self: *Self = @fieldParentPtr("interface", iterable);
-            if (self.buffered_size == 0) _ = try self.read();
-            return self.buffer.getValue();
-        }
-
-        pub fn setValue(iterable: *Interface, value: Value) anyerror!*Interface {
-            var self: *Self = @fieldParentPtr("interface", iterable);
-            _ = try self.buffer.setValue(value);
-            return iterable;
-        }
-
-        pub fn getState(iterable: *Interface) anyerror!State {
-            const self: *Self = @fieldParentPtr("interface", iterable);
-            return switch (self.index) {
-                .valid => |index| .{ .valid = index + self.vector().index.valid },
-                else => self.index,
-            };
-        }
-
-        pub fn setState(iterable: *Interface, index: State) anyerror!*Interface {
-            var self: *Self = @fieldParentPtr("interface", iterable);
-            switch (index) {
-                .valid => |i| {
-                    switch (self.mode) {
-                        .read => {
-                            const collection_size = try self.size();
-
-                            if (i < collection_size) {
-                                self.index = index;
-                                _ = try self.read();
-                            } else return error.InvalidState;
-                        },
-                        .write => {
-                            _ = try self.write();
-                            self.index = index;
-                        },
-                    }
-                },
-                else => {
-                    self.index = index;
-                    return error.InvalidState;
-                },
+        pub const Readable = struct {
+            pub inline fn init(collection: *BufIn.Collection, buffer: *In.Interface) It.Readable.This {
+                var buf_in = BufIn.init(collection, buffer, .get);
+                return InIt.Readable.init(&buf_in.interface);
             }
+        };
 
-            return iterable;
-        }
-
-        pub fn setPreviousState(iterable: *Interface) anyerror!*Interface {
-            var self: *Self = @fieldParentPtr("interface", iterable);
-
-            switch (self.index) {
-                .underflow => self.index = .underflow,
-                .valid => |index| {
-                    const new_index, const underflow = @subWithOverflow(index, 1);
-                    const underflowed = underflow == 1;
-
-                    switch (self.mode) {
-                        .read => {
-                            if (underflowed) {
-                                _ = try self.buffer.setInitialState();
-                                self.index = .underflow;
-                            } else if (self.buffered_size > 0) {
-                                _ = self.buffer.setPreviousState() catch |err| switch (err) {
-                                    error.InvalidState => _ = try iterable.setState(
-                                        iterable,
-                                        .{ .valid = new_index },
-                                    ),
-                                    else => return err,
-                                };
-                            } else {
-                                self.index = .{ .valid = new_index };
-                                _ = try self.read();
-                            }
-                        },
-                        .write => {
-                            if (underflowed) {
-                                _ = try self.write();
-                                self.index = .underflow;
-                            } else if (self.buffered_size > 0) {
-                                _ = self.buffer.setPreviousState() catch |err| switch (err) {
-                                    error.InvalidState => _ = try iterable.setState(
-                                        iterable,
-                                        .{ .valid = new_index },
-                                    ),
-                                    else => return err,
-                                };
-                            } else {
-                                self.index = .{ .valid = new_index };
-                            }
-                        },
-                    }
-                },
-                .overflow => _ = try iterable.setState(iterable, .{ .valid = self.index.valid - 1 }),
+        pub const Writable = struct {
+            pub inline fn init(collection: *BufIn.Collection, buffer: *In.Interface) It.Writable.This {
+                var buf_in = BufIn.init(collection, buffer, .set);
+                return InIt.Writable.init(&buf_in.interface);
             }
-
-            return iterable;
-        }
-
-        pub fn setNextState(iterable: *Interface) anyerror!*Interface {
-            const self: *Self = @fieldParentPtr("interface", iterable);
-
-            switch (self.index) {
-                .underflow => _ = try iterable.setState(iterable, .{ .valid = 0 }),
-                .valid => |index| {
-                    const new_index, const overflow = @addWithOverflow(index + self.vector().index.valid, 1);
-                    var overflowed = overflow == 1;
-
-                    switch (self.mode) {
-                        .read => {
-                            const collection_size = try self.size();
-                            overflowed = overflowed or new_index == collection_size;
-
-                            if (overflowed) {
-                                _ = try self.buffer.setInitialState();
-                                self.index = .overflow;
-                                return error.InvalidState;
-                            } else if (self.buffered_size > 0) {
-                                switch (new_index < index + self.buffered_size) {
-                                    true => _ = try self.buffer.setNextState(),
-                                    false => {
-                                        self.index = .{ .valid = new_index };
-                                        _ = try self.read();
-                                    },
-                                }
-                            } else {
-                                _ = try self.read();
-                            }
-                        },
-                        .write => {
-                            if (overflowed) {
-                                _ = try self.write();
-                                self.index = .overflow;
-                                return error.InvalidState;
-                            } else {
-                                _ = self.buffer.setNextState() catch |err| switch (err) {
-                                    error.InvalidState => _ = try self.write(),
-                                    else => return err,
-                                };
-                            }
-                        },
-                    }
-                },
-                .overflow => self.index = .overflow,
-            }
-
-            return iterable;
-        }
-
-        pub fn setInitialState(iterable: *Interface) anyerror!*Interface {
-            return iterable.setState(iterable, .{ .valid = 0 });
-        }
-
-        pub fn setFinalState(iterable: *Interface) anyerror!*Interface {
-            var self: *Self = @fieldParentPtr("interface", iterable);
-            const collection_size = try self.size();
-            return iterable.setState(iterable, .{ .valid = collection_size -| 1 });
-        }
-
-        pub fn isStateValid(iterable: *Interface) anyerror!bool {
-            const self: *Self = @fieldParentPtr("interface", iterable);
-            return switch (self.index) {
-                .valid => |_| true,
-                else => false,
-            };
-        }
-
-        pub fn vector(self: *Self) Vector {
-            const v: *Vector = @fieldParentPtr("interface", self.buffer.interface);
-            return v.*;
-        }
-
-        pub fn read(self: *Self) anyerror!*Self {
-            const index = self.index.valid;
-            const v = self.vector().vector;
-            const s = try self.collection.read(self.collection, index, v);
-            _ = try self.buffer.setInitialState();
-            self.buffered_size = s;
-            return self;
-        }
-
-        pub fn write(self: *Self) anyerror!*Self {
-            const index = self.index.valid;
-            _ = try self.collection.write(self.collection, index, self.vector().vector);
-            _ = try self.buffer.setInitialState();
-            self.index = .{ .valid = index + self.buffered_size -| 1 };
-            self.buffered_size = 0;
-            return self;
-        }
-
-        pub fn size(self: *Self) anyerror!usize {
-            if (self.collection_size) |s| if (self.mode == .read) return s;
-            return try self.collection.size(self.collection);
-        }
-
-        pub const Collection = struct {
-            read: *const fn (collection: *@This(), index: usize, vector: Vector.Vec) anyerror!usize,
-            write: *const fn (collection: *@This(), index: usize, vector: Vector.Vec) anyerror!*@This(),
-            size: *const fn (collection: *@This()) anyerror!usize,
         };
     };
 }
 
-test Buffered {
-    _ = Buffered(u8);
+test Iterator {
+    _ = Iterator(u8, 16, 4);
 }
 
-pub const Mode = enum { read, write };
+pub fn Iterable(Value: type, comptime capacity: anytype, comptime buffer_capacity: anytype) type {
+    return struct {
+        const In = in.Collection(Value, capacity);
+        pub const BufIn = Indexable(Value, capacity, buffer_capacity);
+        const InIb = in.Iterable(Value, capacity);
+        const Ib = ib.Iterable(Value, State);
+        const State = InIb.StateType;
+        pub const StateType = State;
+
+        pub inline fn init(collection: *BufIn.Collection, buffer: *In.Interface, mode: Mode) Ib {
+            var buf_in = BufIn.init(collection, buffer, mode);
+            var in_ib = InIb.init(&buf_in.interface);
+            return Ib.init(&in_ib.interface);
+        }
+    };
+}
+
+test Iterable {
+    _ = Iterable(u8, 16, 4);
+}
+
+pub fn Indexable(Value: type, comptime capacity: anytype, comptime buffer_capacity: anytype) type {
+    return struct {
+        const Self = @This();
+        const In = in.Collection(Value, capacity);
+        pub const Interface = In.Interface;
+        const Ib = ib.Iterable(Value, State);
+        pub const Collection = in.Collection(Vector.Slice, capacity);
+        pub const BufferCapacity = @TypeOf(buffer_capacity);
+        pub const Capacity = @TypeOf(capacity);
+        pub const Vector = vec.Indexable(Value, buffer_capacity);
+        const State = scalar.State(Value, capacity);
+        pub const StateType = State;
+        pub const Buffer = in.Collection(Value, buffer_capacity);
+
+        interface: Interface,
+        collection: *Collection,
+        collection_size: ?Capacity = null,
+
+        /// A `Vector` indexable.
+        buffer: Buffer,
+        buffered_size: BufferCapacity = 0,
+
+        /// The index of the buffer in the collection.
+        buffer_index: Capacity,
+        mode: Mode,
+
+        pub fn init(
+            collection: *Collection,
+            /// An `Indexable` interface for ``vector.Indexable`.
+            buffer: *Buffer.Interface,
+            mode: Mode,
+        ) Self {
+            return .{
+                .interface = .{
+                    .mode = mode,
+                    .get = get,
+                    .set = set,
+                    .size = size,
+                },
+                .collection = collection,
+                .buffer = .init(buffer),
+                .buffer_index = 0,
+                .mode = mode,
+            };
+        }
+
+        fn get(indexable: *Interface, index: Capacity) anyerror!Value {
+            const self: *Self = @fieldParentPtr("interface", indexable);
+
+            return try if (self.isInsideBuffer(index)) get_from_buffer: {
+                const relative_index = index - self.buffer_index;
+                break :get_from_buffer self.buffer.get(@truncate(relative_index));
+            } else refill_buffer: {
+                const buffer_slice = try self.collection.get(index);
+                self.buffered_size = @truncate(buffer_slice.len);
+                break :refill_buffer self.buffer.get(0);
+            };
+        }
+
+        fn set(indexable: *Interface, index: Capacity, value: Value) anyerror!*Interface {
+            var self: *Self = @fieldParentPtr("interface", indexable);
+
+            if (self.isInsideBuffer(index)) {
+                const relative_index = self.getRelativeIndex(index);
+                self.buffered_size = @max(self.buffered_size, @as(BufferCapacity, @truncate(relative_index + 1)));
+                _ = try self.buffer.set(@truncate(relative_index), value);
+            } else {
+                _ = try self.flush();
+                _ = try self.buffer.set(0, value);
+                self.buffered_size = 1;
+            }
+
+            self.collection_size = @max(index + 1, self.collection_size orelse 0);
+            return indexable;
+        }
+
+        fn size(indexable: *Interface) anyerror!Capacity {
+            const self: *Self = @fieldParentPtr("interface", indexable);
+            if (self.collection_size == null) self.collection_size = try self.collection.size();
+            return self.collection_size.?;
+        }
+
+        pub fn isInsideBuffer(self: *const Self, index: Capacity) bool {
+            const buffer_end_index = switch (self.mode) {
+                .get => self.buffered_size,
+                .set => buffer_capacity,
+            };
+            const end_index = self.buffer_index + buffer_end_index;
+            return index >= self.buffer_index and index < end_index;
+        }
+
+        /// Gets an index in buffer from an index in collection.
+        pub fn getRelativeIndex(self: *const Self, index: Capacity) Capacity {
+            return index - self.buffer_index;
+        }
+
+        pub fn flush(self: *Self) anyerror!*Self {
+            _ = try self.collection.set(self.buffer_index, self.buffered());
+            self.buffer_index += self.buffered_size;
+            self.buffered_size = 0;
+            return self;
+        }
+
+        pub fn buffered(self: *const Self) Vector.Slice {
+            const vector: *Vector = @fieldParentPtr("interface", self.buffer.interface);
+            return vector.slice[0..self.buffered_size];
+        }
+    };
+}
+
+test Indexable {
+    _ = Indexable(u8, 16, 4);
+}

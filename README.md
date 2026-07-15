@@ -36,12 +36,13 @@ exe.root_module.addImport("iteratorz", iteratorz.module("iteratorz"));
 
 ### Examples
 
-Look at [uppercase_vowels](./examples/uppercase_vowels.zig).
+- [Text](./examples/text.zig)
+- [Uppercase](./examples/uppercase.zig)
 
 ## Architecture
 
 ```
-Collection -> Iterable -> Iterator -> Higher-order Iterator
+Collection -> Iterable -> Iterator -> HigherOrderIterator
 ```
 
 ### Collection
@@ -71,7 +72,7 @@ An iterable is a collection with a state that can be mapped to its values. The
 state has valid and invalid values. Valid states can be used to read and write
 values. Invalid states can not be mapped to any value of the collection. Invalid
 states can arise if an attempt to change the state results in a value that is
-not a valid state.
+not a valid state. Invalid states may signal the end of an iteration.
 
 ### Iterator
 
@@ -105,39 +106,39 @@ even numbers up to 100, you could take the following steps:
 3. Pipe the map to a filter that limits values to 100.
 4. Iterate over the final iterator.
 
-In mathematical terms, it is:
-
-<div style="margin-bottom: 15px;">
-  <math display="block">
-    <mtext>Even</mtext>
-    <mo>:=</mo>
-    <mo>{</mo>
-    <mrow>
-      <mn>2</mn>
+<figure>
+  <div style="margin-bottom: 15px;">
+    <math display="block">
+      <mtext>Even</mtext>
+      <mo>:=</mo>
+      <mo>{</mo>
+      <mrow>
+        <mn>2</mn>
+        <mi>x</mi>
+      </mrow>
+      <mo fence="true">|</mo> 
+      <mi>x</mi> 
+      <mo>∈</mo> 
+      <mi>𝕎</mi>
+      <mo>}</mo> 
+    </math>
+  </div>
+  <div>
+    <math display="block">
+      <mtext>UpTo100</mtext> 
+      <mo>:=</mo> 
+      <mo>{</mo>
       <mi>x</mi>
-    </mrow>
-    <mo fence="true">|</mo> 
-    <mi>x</mi> 
-    <mo>∈</mo> 
-    <mi>𝕎</mi>
-    <mo>}</mo> 
-  </math>
-</div>
-
-<div>
-  <math display="block">
-    <mtext>UpTo100</mtext> 
-    <mo>:=</mo> 
-    <mo>{</mo>
-    <mi>x</mi>
-    <mo fence="true">|</mo> 
-    <mi>x</mi> 
-    <mo>∈</mo> 
-    <mtext>Even</mtext> 
-    <mo>∧</mo> 
-    <mi>x</mi> 
-    <mo>≤</mo> 
-    <mn>100</mn>
-    <mo>}</mo>
-  </math>
-</div>
+      <mo fence="true">|</mo> 
+      <mi>x</mi> 
+      <mo>∈</mo> 
+      <mtext>Even</mtext> 
+      <mo>∧</mo> 
+      <mi>x</mi> 
+      <mo>≤</mo> 
+      <mn>100</mn>
+      <mo>}</mo>
+    </math>
+  </div>
+  <figcaption>Mathematical representation of even numbers up to 100.</figcaption>
+</figure>

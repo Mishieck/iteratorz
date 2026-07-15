@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
-const vector = @import("vector.zig");
+const vec = @import("vector.zig");
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
 
@@ -14,13 +14,14 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
         pub const StateType = State;
         pub const Value = @typeInfo(ReturnType).error_union.payload;
         pub const State = BaseIterator.StateType;
+        const BaIt = it.Iterator(BaseValue, State);
         pub const Iterator = it.Iterator(Value, State);
         pub const ReadableIterator = Iterator.Readable.Interface;
         pub const Map = fn (value: BaseValue) ReturnType;
         const mapValue: Map = map;
 
         interface: ReadableIterator,
-        base_iterator: *ReadableIterator,
+        base_iterator: *BaIt.Readable.Interface,
 
         pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable.This {
             var self: Self = .init(base_iterator);
@@ -94,18 +95,15 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
 
 test Readable {
     const Value = u8;
-    const State = vector.State;
-    const Vec = vector.Vector(Value);
-    const Ib = ib.Iterable(Value, State);
+    const capacity: u8 = 5;
+    const VecIt = vec.Iterator(Value, capacity);
+    const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
 
-    const slice: []Vec.ValueType = @constCast("hello");
+    const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
-    var vec = Vec.init(slice);
-    var vec_ib = Ib.init(&vec.interface);
-    var int = It.Readable.Default.init(&vec_ib);
-    var iter = It.Readable.This.init(&int.interface);
-    var m = iter.to(Readable(It, capitalize));
+    var iter = VecIt.Readable.init(slice);
+    var m = iter.to(Readable(It, toUppercase));
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
@@ -125,13 +123,14 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
         pub const StateType = State;
         pub const Value = @typeInfo(@TypeOf(map)).@"fn".params[0].type.?;
         pub const State = BaseIterator.StateType;
+        const BaIt = it.Iterator(BaseValue, State);
         pub const Iterator = it.Iterator(Value, State);
         pub const WritableIterator = Iterator.Writable.Interface;
         pub const Map = fn (value: Value) anyerror!BaseValue;
         const mapValue: Map = map;
 
         interface: WritableIterator,
-        base_iterator: *WritableIterator,
+        base_iterator: *BaIt.Writable.Interface,
 
         pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable.This {
             var self: Self = .init(base_iterator);
@@ -205,24 +204,21 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
 
 test Writable {
     const Value = u8;
-    const State = vector.State;
-    const Vec = vector.Vector(Value);
-    const Ib = ib.Iterable(Value, State);
+    const capacity: u8 = 5;
+    const VecIt = vec.Iterator(Value, capacity);
+    const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
 
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
     var buffer: [slice.len]u8 = undefined;
-    var vec = Vec.init(&buffer);
-    var vec_ib = Ib.init(&vec.interface);
-    var int = It.Writable.Default.init(&vec_ib);
-    var iter = It.Writable.This.init(&int.interface);
-    var m = iter.to(Writable(It, capitalize));
+    var iter = VecIt.Writable.init(&buffer);
+    var m = iter.to(Writable(It, toUppercase));
 
     for (slice) |char| _ = try m.current(char);
     try testing.expectEqualStrings(capitalized, &buffer);
 }
 
-fn capitalize(char: u8) anyerror!u8 {
+fn toUppercase(char: u8) anyerror!u8 {
     return std.ascii.toUpper(char);
 }

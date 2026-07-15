@@ -9,27 +9,41 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const uppercase_vowels = b.addExecutable(.{
-        .name = "iteratorz",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("./examples/uppercase_vowels.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    uppercase_vowels.root_module.addImport("iteratorz", mod);
-
-    b.installArtifact(uppercase_vowels);
-    const run_step = b.step("uppercase_vowels", "Run uppercase_vowels.");
-    const run_cmd = b.addRunArtifact(uppercase_vowels);
-    run_step.dependOn(&run_cmd.step);
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| run_cmd.addArgs(args);
+    const examples = [_][]const u8{ "text", "uppercase" };
+    inline for (examples) |name| addExample(b, target, optimize, name, mod);
 
     const mod_tests = b.addTest(.{ .root_module = mod });
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
+}
+
+fn addExample(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime name: []const u8,
+    mod: *std.Build.Module,
+) void {
+    const examples_node = b.addExecutable(.{
+        .name = "examples_" ++ name,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/" ++ name ++ ".zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "iteratorz", .module = mod },
+            },
+        }),
+    });
+
+    b.installArtifact(examples_node);
+
+    const run_step = b.step("example_" ++ name, "Run the " ++ name ++ " example.");
+
+    const run_cmd = b.addRunArtifact(examples_node);
+    run_step.dependOn(&run_cmd.step);
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| run_cmd.addArgs(args);
 }

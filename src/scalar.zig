@@ -3,9 +3,58 @@ const debug = std.debug;
 const testing = std.testing;
 
 const ib = @import("iterable.zig");
+const it = @import("iterator.zig");
 const vec = @import("vector.zig");
 
-pub fn Scalar(Value: type, comptime size: u16) type {
+pub fn Iterator(Value: type, comptime size: anytype) type {
+    return struct {
+        const Size = @TypeOf(size);
+        pub const ValueType = Value;
+        pub const StateType = ScIb.StateType;
+
+        const ScIb = Iterable(Value, size);
+        const Ib = ib.Iterable(Value, StateType);
+
+        pub const Readable = struct {
+            const It = it.Iterator(Value, StateType).Readable;
+
+            pub inline fn init() It.This {
+                return It.This.init(
+                    @constCast(&It.Default.init(@constCast(&ScIb.init().interface)).interface),
+                );
+            }
+        };
+
+        pub const Writable = struct {
+            const It = it.Iterator(Value, StateType).Writable;
+
+            pub inline fn init() It.This {
+                var iterable = Ib.init(@constCast(&ScIb.init().interface));
+                var default = It.Default.init(&iterable);
+                return It.This.init(&default.interface);
+            }
+        };
+    };
+}
+
+test Iterator {
+    const U2 = Iterator(u2, 4);
+    const S = U2.StateType;
+    var scalar = U2.Readable.init();
+
+    for (0..4) |i| {
+        const value = try scalar.current();
+        try testing.expect(value != null);
+        try testing.expectEqual(i, value.?);
+    }
+
+    try testing.expectEqualDeep(S.overflow, try scalar.getState());
+    _ = try scalar.setInitialState();
+    try testing.expectEqual(null, try scalar.previous());
+    try testing.expectEqual(S.underflow, scalar.getState());
+}
+
+pub fn Iterable(Value: type, comptime size: u16) type {
     return struct {
         const Self = @This();
         pub const ValueType = Value;
@@ -51,18 +100,24 @@ pub fn Scalar(Value: type, comptime size: u16) type {
         pub fn setState(iterable: *Interface, state: StateType) anyerror!*Interface {
             var self: *Self = @fieldParentPtr("interface", iterable);
             self.state = state;
+            switch (state) {
+                .valid => |_| {},
+                else => return error.InvalidState,
+            }
             return iterable;
         }
 
         pub fn setNextState(iterable: *Interface) anyerror!*Interface {
             var self: *Self = @fieldParentPtr("interface", iterable);
             self.state = self.state.getNext();
+            if (self.state == StateType.overflow) return error.InvalidState;
             return iterable;
         }
 
         pub fn setPreviousState(iterable: *Interface) anyerror!*Interface {
             var self: *Self = @fieldParentPtr("interface", iterable);
             self.state = self.state.getPrevious();
+            if (self.state == StateType.underflow) return error.InvalidState;
             return iterable;
         }
 
@@ -88,9 +143,9 @@ pub fn Scalar(Value: type, comptime size: u16) type {
     };
 }
 
-test Scalar {
-    const U2 = Scalar(u2, 4);
-    const S = State(u2, 4);
+test Iterable {
+    const U2 = Iterable(u2, 4);
+    const S = U2.StateType;
     var scalar = U2.init();
 
     try testing.expectEqual(0, scalar.interface.getValue(&scalar.interface));
@@ -103,13 +158,17 @@ test Scalar {
             S{ .valid = @truncate(i) },
             try scalar.interface.getState(&scalar.interface),
         );
-        _ = try scalar.interface.setNextState(&scalar.interface);
+        _ = scalar.interface.setNextState(&scalar.interface) catch |err| {
+            if (err != error.InvalidState) return err;
+        };
     }
 
     try testing.expectEqualDeep(S.overflow, try scalar.interface.getState(&scalar.interface));
 
     _ = try scalar.interface.setInitialState(&scalar.interface);
-    _ = try scalar.interface.setPreviousState(&scalar.interface);
+    _ = scalar.interface.setPreviousState(&scalar.interface) catch |err| {
+        if (err != error.InvalidState) return err;
+    };
     try testing.expectEqualDeep(S.underflow, try scalar.interface.getState(&scalar.interface));
 }
 
@@ -126,7 +185,7 @@ test typeToState {
 /// range from the minimum value to the maximum value of the scalar. When the
 /// value goes below the minimum value, the state becomes `underflow`. When
 /// the value goes above the maximum value, the state becomes `overflow`.
-pub fn State(Value: type, comptime size: u16) type {
+pub fn State(Value: type, comptime size: anytype) type {
     return union(enum) {
         const Self = @This();
 

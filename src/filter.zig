@@ -2,17 +2,17 @@ const std = @import("std");
 const testing = std.testing;
 
 const ib = @import("iterable.zig");
-const vector = @import("vector.zig");
+const vec = @import("vector.zig");
 const it = @import("iterator.zig");
 
 pub fn Readable(BaseIterator: type, predicate: anytype) type {
     return struct {
         const Self = @This();
-        pub const Iterator = it.Iterator(BaseIterator.ValueType, BaseIterator.StateType);
+        pub const Iterator = it.Iterator(Value, State);
+        pub const Value = BaseIterator.ValueType;
+        pub const State = BaseIterator.StateType;
         pub const ValueType = Value;
         pub const StateType = State;
-        pub const Value = Iterator.ValueType;
-        pub const State = Iterator.StateType;
         pub const ReadableIterator = Iterator.Readable.Interface;
         pub const Predicate = fn (value: Value) anyerror!bool;
         const isMatch: Predicate = predicate;
@@ -21,8 +21,9 @@ pub fn Readable(BaseIterator: type, predicate: anytype) type {
         base_iterator: *ReadableIterator,
 
         pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable.This {
-            var self: Self = .init(base_iterator);
-            return @constCast(&Iterator.Readable.This.init(&self.interface));
+            return @constCast(
+                &Iterator.Readable.This.init(@constCast(&Self.init(base_iterator).interface)),
+            );
         }
 
         pub fn init(base_iterator: *ReadableIterator) Self {
@@ -95,26 +96,19 @@ pub fn Readable(BaseIterator: type, predicate: anytype) type {
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
         }
-
-        pub inline fn to(self: *Self, Other: type) it.Infer(Other).Readable {
-            return Other.from(self.interface);
-        }
     };
 }
 
 test Readable {
     const Value = u8;
-    const State = vector.State;
-    const Vec = vector.Vector(Value);
-    const Ib = ib.Iterable(Value, State);
+    const capacity = 5;
+    const VecIt = vec.Iterator(Value, capacity);
+    const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
 
-    const slice: []Vec.ValueType = @constCast("hello");
+    const slice: []Value = @constCast("hello");
     const vowels = "eo";
-    var vec = Vec.init(slice);
-    var vec_ib = Ib.init(&vec.interface);
-    var int = It.Readable.Default.init(&vec_ib);
-    var iter = It.Readable.This.init(&int.interface);
+    var iter = VecIt.Readable.init(slice);
     var f = iter.to(Readable(It, isVowel));
     var iterated: [slice.len]u8 = undefined;
 
@@ -232,18 +226,15 @@ pub fn Writable(BaseIterator: type, predicate: anytype) type {
 
 test Writable {
     const Value = u8;
-    const State = vector.State;
-    const Vec = vector.Vector(Value);
-    const Ib = ib.Iterable(Value, State);
+    const capacity = 5;
+    const VecIt = vec.Iterator(Value, capacity);
+    const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
 
     const slice: []Value = @constCast("hello");
     const vowels = "eo";
     var buffer: [slice.len]u8 = undefined;
-    var vec = Vec.init(&buffer);
-    var vec_ib = Ib.init(&vec.interface);
-    var int = It.Writable.Default.init(&vec_ib);
-    var iter = It.Writable.This.init(&int.interface);
+    var iter = VecIt.Writable.init(slice);
     var f = iter.to(Writable(It, isVowel));
 
     for (slice) |char| _ = try f.current(char);
