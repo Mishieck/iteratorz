@@ -1,3 +1,8 @@
+//! Converts text to uppercase using a pipeline. It does the following:
+//!
+//! 1. Iterate over text characters.
+//! 2. Map each character to uppercase.
+
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;

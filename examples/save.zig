@@ -1,3 +1,9 @@
+//! Performs read/write operations on a file. It performs the following
+//! operations:
+//!
+//! 1. Writes text to a file.
+//! 2. Reads the written text from a file.
+
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;

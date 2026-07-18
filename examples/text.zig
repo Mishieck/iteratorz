@@ -1,3 +1,5 @@
+//! Iterates over text characters.
+
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;

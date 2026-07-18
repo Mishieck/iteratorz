@@ -36,9 +36,9 @@ exe.root_module.addImport("iteratorz", iteratorz.module("iteratorz"));
 
 ### Examples
 
-- [Text](./examples/text.zig)
-- [Uppercase](./examples/uppercase.zig)
-- [Save](./examples/save.zig)
+- [Iterate over text characters](./examples/text.zig)
+- [Cconvert text characters to uppercase](./examples/uppercase.zig)
+- [Perform read/write operations on a file](./examples/save.zig)
 
 ## Architecture
 

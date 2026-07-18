@@ -1,3 +1,6 @@
+//! ERROR: This example does not run yet. It fails due to a comptime error in
+//! [filter](../src/filter.zig).
+
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
