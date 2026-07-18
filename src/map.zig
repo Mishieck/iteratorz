@@ -1,3 +1,7 @@
+//! A higher-order iterator that maps values of an iterator to other values
+//! It users a map function where its input is a value from the base iterator
+//! and its output is a value of the map iterator.
+
 const std = @import("std");
 const testing = std.testing;
 

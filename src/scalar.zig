@@ -1,3 +1,6 @@
+//! Scalar is an abstract data structure that has values from 0 to N, where N is
+//! a whole number.
+
 const std = @import("std");
 const debug = std.debug;
 const testing = std.testing;

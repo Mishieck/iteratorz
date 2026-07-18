@@ -1,3 +1,5 @@
+//! Data structures for iterating over an array.
+
 const std = @import("std");
 const testing = std.testing;
 const ib = @import("iterable.zig");

@@ -1,3 +1,6 @@
+//! Indexable is an abstract collection where each value can be mapped to an
+//! index. The index is used to get and set a value.
+
 const std = @import("std");
 const debug = std.debug;
 const testing = std.testing;

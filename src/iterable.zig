@@ -1,3 +1,8 @@
+//! Iterable is an abstract collection where each value can be mapped to a
+//! state. A state can be valid or invalid. Valid states can be mapped to values
+//! in the collection. Invalid states are out-of-bounds. Therefore, they can not
+//! be mapped to any value in the collection.
+
 const std = @import("std");
 const testing = std.testing;
 

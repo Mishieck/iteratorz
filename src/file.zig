@@ -1,3 +1,5 @@
+//! Data structures for performing read/write operations on a file.
+
 const std = @import("std");
 
 const builtin = @import("builtin");

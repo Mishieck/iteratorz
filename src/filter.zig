@@ -1,3 +1,8 @@
+//! ERROR: This module does not work yet due to a comptime error.
+//!
+//! A higher-order iterator which filters values of another iterator. The
+//! filter uses a predicate to filter values from another iterator.
+
 const std = @import("std");
 const testing = std.testing;
 

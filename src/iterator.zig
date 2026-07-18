@@ -1,3 +1,15 @@
+//! An iterator is an abstract collection where values can be set or gotten
+//! using in sequences. The collection is in a particular state at any moment.
+//! The state can be valid or invalid. Each valid state can be mapped to a value
+//! in the collection. The collection can not produce or consume values when its
+//! state is invalid.
+//!
+//! A value in this collection may have a previous and/or next value. Each set
+//! or get operation on an iterator advances its state in a forward or backward
+//! direction.
+//!
+//! An iterator depends on an iterable for its functionality.
+
 const std = @import("std");
 const testing = std.testing;
 const ib = @import("iterable.zig");
