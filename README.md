@@ -38,6 +38,7 @@ exe.root_module.addImport("iteratorz", iteratorz.module("iteratorz"));
 
 - [Text](./examples/text.zig)
 - [Uppercase](./examples/uppercase.zig)
+- [Save](./examples/save.zig)
 
 ## Architecture
 
@@ -50,7 +51,7 @@ Collection -> Iterable -> Iterator -> HigherOrderIterator
 A collection is a value that is capable of producing and consuming other values.
 A readable collection produces values. A writable collection consumes values.
 
-A collection may be concrete or abstract. 
+A collection may be concrete or abstract.
 
 <dl>
   <dt>Concrete Collection</dt>

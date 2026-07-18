@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const examples = [_][]const u8{ "text", "uppercase" };
+    const examples = [_][]const u8{ "text", "uppercase", "save" };
     inline for (examples) |name| addExample(b, target, optimize, name, mod);
 
     const mod_tests = b.addTest(.{ .root_module = mod });
