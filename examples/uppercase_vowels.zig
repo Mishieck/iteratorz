@@ -1,5 +1,7 @@
 //! ERROR: This example does not run yet. It fails due to a comptime error in
 //! [filter](../src/filter.zig).
+//!
+//! Uses a pipeline to filter vowels from text and convert them to uppercase.
 
 const std = @import("std");
 const debug = std.debug;
