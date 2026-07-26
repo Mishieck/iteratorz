@@ -1,6 +1,6 @@
 .{
     .name = .iteratorz,
-    .version = "0.2.1",
+    .version = "0.2.2",
     .fingerprint = 0xfea15ced1b7b4c6,
     .minimum_zig_version = "0.15.1",
     .dependencies = .{},

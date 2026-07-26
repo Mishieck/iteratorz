@@ -27,12 +27,12 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
         interface: ReadableIterator,
         base_iterator: *BaIt.Readable.Interface,
 
-        pub inline fn from(base_iterator: *ReadableIterator) *Iterator.Readable.This {
+        pub inline fn from(base_iterator: *BaIt.Readable.Interface) *Iterator.Readable.This {
             var self: Self = .init(base_iterator);
             return @constCast(&Iterator.Readable.This.init(&self.interface));
         }
 
-        pub fn init(base_iterator: *ReadableIterator) Self {
+        pub fn init(base_iterator: *BaIt.Readable.Interface) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -136,12 +136,12 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
         interface: WritableIterator,
         base_iterator: *BaIt.Writable.Interface,
 
-        pub inline fn from(base_iterator: *WritableIterator) *Iterator.Writable.This {
+        pub inline fn from(base_iterator: *BaIt.Writable.Interface) *Iterator.Writable.This {
             var self: Self = .init(base_iterator);
             return @constCast(&Iterator.Writable.This.init(&self.interface));
         }
 
-        pub fn init(base_iterator: *WritableIterator) Self {
+        pub fn init(base_iterator: *BaIt.Writable.Interface) Self {
             return .{
                 .interface = .{
                     .previous = previous,
