@@ -189,7 +189,7 @@ pub fn ReadableIterator(Value: type, State: type) type {
                 return self.interface.getState(self.interface);
             }
 
-            pub fn setState(self: *Self, state: State) anyerror!State {
+            pub fn setState(self: *Self, state: State) anyerror!*Self {
                 return self.interface.setState(self.interface, state);
             }
 
