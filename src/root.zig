@@ -5,7 +5,7 @@ pub const scalar = @import("scalar.zig");
 pub const vector = @import("vector.zig");
 pub const buffered = @import("buffered.zig");
 pub const file = @import("file.zig");
-// pub const filter = @import("filter.zig");
+pub const filter = @import("filter.zig");
 pub const map = @import("map.zig");
 
 test {
@@ -16,6 +16,6 @@ test {
     _ = file;
     _ = buffered;
     _ = iterator;
-    // _ = filter;
+    _ = filter;
     _ = map;
 }

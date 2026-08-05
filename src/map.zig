@@ -4,12 +4,58 @@
 
 const std = @import("std");
 const testing = std.testing;
+const mem = std.mem;
 
 const vec = @import("vector.zig");
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
+const Mode = @import("mode.zig").Mode;
 
-pub fn Readable(BaseIterator: type, map: anytype) type {
+pub fn This(BaseIterator: type, map: anytype) type {
+    return struct {
+        const ReturnType = @typeInfo(@TypeOf(map)).@"fn".return_type.?;
+        pub const BaseValue = BaseIterator.ValueType;
+        pub const ValueType = Value;
+        pub const StateType = State;
+        pub const Value = @typeInfo(ReturnType).error_union.payload;
+        pub const State = BaseIterator.StateType;
+        const BaIt = it.Iterator(BaseValue, State);
+        pub const It = it.Iterator(Value, State);
+        pub const Map = fn (value: BaseValue) ReturnType;
+        const mapValue: Map = map;
+
+        pub const Readable = create(.get);
+        pub const Writable = create(.set);
+
+        pub fn create(mode: Mode) type {
+            return struct {
+                const Self = @This();
+                const Iterator = if (mode == .get) It.Readable else It.Writable;
+                const Base = if (mode == .get) BaIt.Readable else BaIt.Writable;
+                const Rm = ReadableMap(BaseIterator, map);
+                const Wm = WritableMap(BaseIterator, map);
+                const MapIterator = if (mode == .get) Rm else Wm;
+
+                map_iterator: *MapIterator,
+
+                pub fn init(gpa: mem.Allocator, base_iterator: *Base.Interface) !Self {
+                    const map_iterator = try MapIterator.create(gpa, base_iterator);
+                    return .{ .map_iterator = map_iterator };
+                }
+
+                pub fn deinit(self: *Self, gpa: mem.Allocator) void {
+                    gpa.destroy(self.map_iterator);
+                }
+
+                pub fn iterator(self: *const Self) Iterator.This {
+                    return .init(&self.map_iterator.interface);
+                }
+            };
+        }
+    };
+}
+
+pub fn ReadableMap(BaseIterator: type, map: anytype) type {
     return struct {
         const Self = @This();
         const ReturnType = @typeInfo(@TypeOf(map)).@"fn".return_type.?;
@@ -27,9 +73,10 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
         interface: ReadableIterator,
         base_iterator: *BaIt.Readable.Interface,
 
-        pub inline fn from(base_iterator: *BaIt.Readable.Interface) *Iterator.Readable.This {
-            var self: Self = .init(base_iterator);
-            return @constCast(&Iterator.Readable.This.init(&self.interface));
+        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Readable.Interface) !*Self {
+            const self = try gpa.create(Self);
+            self.* = .init(base_iterator);
+            return self;
         }
 
         pub fn init(base_iterator: *BaIt.Readable.Interface) Self {
@@ -97,21 +144,26 @@ pub fn Readable(BaseIterator: type, map: anytype) type {
     };
 }
 
-test Readable {
+test ReadableMap {
     const Value = u8;
     const capacity: u8 = 5;
-    const VecIt = vec.Iterator(Value, capacity);
+    const VecIt = vec.This(Value, capacity);
     const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
+    const Map = This(It, toUppercase);
 
+    const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
-    var iter = VecIt.Readable.init(slice);
-    var m = iter.to(Readable(It, toUppercase));
+    var vector = try VecIt.Readable.init(allocator, slice);
+    defer vector.deinit(allocator);
+    var map = try Map.Readable.init(allocator, vector.iterator().interface);
+    defer map.deinit(allocator);
+    var iter = map.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
-    while (try m.current()) |char| {
+    while (try iter.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
@@ -119,7 +171,7 @@ test Readable {
     try testing.expectEqualStrings(capitalized, &iterated);
 }
 
-pub fn Writable(BaseIterator: type, map: anytype) type {
+pub fn WritableMap(BaseIterator: type, map: anytype) type {
     return struct {
         const Self = @This();
         pub const BaseValue = BaseIterator.ValueType;
@@ -136,9 +188,10 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
         interface: WritableIterator,
         base_iterator: *BaIt.Writable.Interface,
 
-        pub inline fn from(base_iterator: *BaIt.Writable.Interface) *Iterator.Writable.This {
-            var self: Self = .init(base_iterator);
-            return @constCast(&Iterator.Writable.This.init(&self.interface));
+        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Writable.Interface) !*Self {
+            const self = try gpa.create(Self);
+            self.* = .init(base_iterator);
+            return self;
         }
 
         pub fn init(base_iterator: *BaIt.Writable.Interface) Self {
@@ -206,20 +259,25 @@ pub fn Writable(BaseIterator: type, map: anytype) type {
     };
 }
 
-test Writable {
+test WritableMap {
     const Value = u8;
     const capacity: u8 = 5;
-    const VecIt = vec.Iterator(Value, capacity);
+    const VecIt = vec.This(Value, capacity);
     const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
+    const Map = This(It, toUppercase).Writable;
 
+    const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
     var buffer: [slice.len]u8 = undefined;
-    var iter = VecIt.Writable.init(&buffer);
-    var m = iter.to(Writable(It, toUppercase));
+    var vector = try VecIt.Writable.init(allocator, &buffer);
+    defer vector.deinit(allocator);
+    var map = try Map.init(allocator, vector.iterator().interface);
+    defer map.deinit(allocator);
+    var iter = map.iterator();
 
-    for (slice) |char| _ = try m.current(char);
+    for (slice) |char| _ = try iter.current(char);
     try testing.expectEqualStrings(capitalized, &buffer);
 }
 

@@ -3,49 +3,73 @@
 
 const std = @import("std");
 const debug = std.debug;
+const mem = std.mem;
 const testing = std.testing;
 
 const scalar = @import("scalar.zig");
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
+const Mode = @import("mode.zig").Mode;
 
-pub fn Iterator(Value: type, comptime capacity: anytype) type {
+pub fn This(Value: type, comptime capacity: anytype) type {
     return struct {
         const Capacity = @TypeOf(capacity);
         pub const ValueType = Value;
         pub const StateType = State;
         const State = InIb.StateType;
 
-        const Co = Collection(Value, capacity);
+        const In = Indexable(Value, capacity);
         const InIb = Iterable(Value, capacity);
         const Ib = ib.Iterable(Value, StateType);
+        const It = it.Iterator(Value, State);
 
-        pub const Readable = struct {
-            const It = it.Iterator(Value, State).Readable;
+        pub const Readable = create(.get);
+        pub const Writable = create(.set);
 
-            pub inline fn init(collection: *Co.Interface) It.This {
-                var default = It.Default.init(
-                    @constCast(&Ib.init(@constCast(&InIb.init(collection).interface))),
-                );
-                return It.This.init(&default.interface);
-            }
-        };
+        pub fn create(mode: Mode) type {
+            return struct {
+                const Self = @This();
+                const Iterator = if (mode == .get) It.Readable else It.Writable;
 
-        pub const Writable = struct {
-            const It = it.Iterator(Value, State).Writable;
+                default_iterator: *Iterator.Default,
+                indexable_iterable: *InIb,
 
-            pub inline fn init(collection: *Co.Interface) It.This {
-                var default = It.Default.init(
-                    @constCast(&Ib.init(@constCast(&InIb.init(collection).interface))),
-                );
-                return It.This.init(&default.interface);
-            }
-        };
+                /// Creates utilities for an indexable. Free memory using `deinit`.
+                pub fn init(gpa: mem.Allocator, in: *In.Interface) !Self {
+                    const indexable_iterable = try InIb.create(gpa, in);
+                    const default_iterator = try Iterator.Default.create(
+                        &indexable_iterable.interface,
+                    );
+
+                    return .{
+                        .default_iterator = default_iterator,
+                        .indexable_iterable = indexable_iterable,
+                    };
+                }
+
+                pub fn deinit(self: *Self, gpa: mem.Allocator) void {
+                    gpa.destroy(self.default_iterator);
+                    gpa.destroy(self.indexable_iterable);
+                }
+
+                pub fn iterator(self: *const Self) Iterator.This {
+                    return .init(&self.default_iterator.interface);
+                }
+
+                pub fn iterable(self: *const Self) Ib {
+                    return .init(&self.indexable_iterable.interface);
+                }
+
+                pub fn indexable(self: *const Self) In {
+                    return self.indexable_iterable.indexable;
+                }
+            };
+        }
     };
 }
 
-test Iterator {
-    const It = Iterator(u8, 16);
+test This {
+    const It = This(u8, 16);
     _ = It.Readable;
     _ = It.Writable;
 }
@@ -61,13 +85,19 @@ pub fn Iterable(Value: type, comptime capacity: anytype) type {
         const Ib = ib.Iterable(Value, State);
         pub const Interface = Ib.Interface;
         pub const Vec = []Value;
-        const CollectionType = Collection(Value, capacity);
+        const IndexableType = Indexable(Value, capacity);
 
         interface: Interface,
-        collection: CollectionType,
+        indexable: IndexableType,
         index: State = .initial,
 
-        pub fn init(collection: *CollectionType.Interface) Self {
+        pub fn create(gpa: mem.Allocator, indexable: *IndexableType.Interface) !*Self {
+            const self = try gpa.create(Self);
+            self.* = .init(indexable);
+            return self;
+        }
+
+        pub fn init(indexable: *IndexableType.Interface) Self {
             return .{
                 .interface = .{
                     .getValue = getValue,
@@ -80,18 +110,18 @@ pub fn Iterable(Value: type, comptime capacity: anytype) type {
                     .setFinalState = setFinalState,
                     .isStateValid = isStateValid,
                 },
-                .collection = .init(collection),
+                .indexable = .init(indexable),
             };
         }
 
         pub fn getValue(iterable: *Interface) anyerror!Value {
             const self: *Self = @fieldParentPtr("interface", iterable);
-            return self.collection.get(self.index.valid);
+            return self.indexable.get(self.index.valid);
         }
 
         pub fn setValue(iterable: *Interface, value: Value) anyerror!*Interface {
             var self: *Self = @fieldParentPtr("interface", iterable);
-            _ = try self.collection.set(self.index.valid, value);
+            _ = try self.indexable.set(self.index.valid, value);
             return iterable;
         }
 
@@ -103,7 +133,7 @@ pub fn Iterable(Value: type, comptime capacity: anytype) type {
         pub fn setState(iterable: *Interface, index: State) anyerror!*Interface {
             var self: *Self = @fieldParentPtr("interface", iterable);
             self.index = switch (index) {
-                .valid => |v| if (v < try self.collection.size()) index else .overflow,
+                .valid => |v| if (v < try self.indexable.size()) index else .overflow,
                 else => index,
             };
             return switch (self.index) {
@@ -116,7 +146,7 @@ pub fn Iterable(Value: type, comptime capacity: anytype) type {
             const self: *Self = @fieldParentPtr("interface", iterable);
             self.index = self.index.getNext();
             return switch (self.index) {
-                .valid => |index| if (index == try self.collection.size()) error.InvalidState else iterable,
+                .valid => |index| if (index == try self.indexable.size()) error.InvalidState else iterable,
                 else => error.InvalidState,
             };
         }
@@ -144,7 +174,7 @@ pub fn Iterable(Value: type, comptime capacity: anytype) type {
 
         pub fn isStateValid(iterable: *Interface) anyerror!bool {
             const self: *Self = @fieldParentPtr("interface", iterable);
-            return self.index.isValid() and self.index.valid < try self.collection.size();
+            return self.index.isValid() and self.index.valid < try self.indexable.size();
         }
     };
 }
@@ -153,7 +183,7 @@ test Iterable {
     _ = Iterable(u8, @as(usize, 16));
 }
 
-pub fn Collection(Value: type, comptime capacity: anytype) type {
+pub fn Indexable(Value: type, comptime capacity: anytype) type {
     return struct {
         const Self = @This();
         pub const Capacity = @TypeOf(capacity);
@@ -186,5 +216,3 @@ pub fn Collection(Value: type, comptime capacity: anytype) type {
         }
     };
 }
-
-pub const Mode = enum { get, set };

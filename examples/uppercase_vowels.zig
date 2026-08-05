@@ -6,6 +6,7 @@
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
+const heap = std.heap;
 const testing = std.testing;
 
 const iteratorz = @import("iteratorz");
@@ -13,18 +14,30 @@ const vec = iteratorz.vector;
 
 const Char = u8;
 const capacity: u3 = 5;
-const Text = vec.Iterator(Char, capacity);
-const Uppercase = iteratorz.map.Readable(Text, toUppercase);
-const Vowels = iteratorz.filter.Readable(Text, isVowel);
+const Text = vec.This(Char, capacity);
+const Uppercase = iteratorz.map.This(Text, toUppercase);
+const Vowels = iteratorz.filter.This(Text, isVowel);
 
 pub fn main() !void {
     const slice: []Char = @constCast("hello");
-    var readable_bytes = Text.Readable.init(slice);
-    var uppercase = readable_bytes.to(Vowels).to(Uppercase);
+
+    var gpa = heap.GeneralPurposeAllocator(.{}){};
+    defer debug.assert(gpa.deinit() == .ok);
+    const allocator = gpa.allocator();
+
+    var readable_bytes = try Text.Readable.init(allocator, slice);
+    defer readable_bytes.deinit(allocator);
+    const readable_iterator = readable_bytes.iterator();
+    var uppercase = try Uppercase.Readable.init(allocator, readable_iterator.interface);
+    defer uppercase.deinit(allocator);
+    const uppercase_iterator = uppercase.iterator();
+    var vowels = try Vowels.Readable.init(allocator, uppercase_iterator.interface);
+    defer vowels.deinit(allocator);
+    var vowels_iterator = vowels.iterator();
     var iterated: [slice.len]Char = undefined;
 
     var i: usize = 0;
-    while (try uppercase.current()) |char| {
+    while (try vowels_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }

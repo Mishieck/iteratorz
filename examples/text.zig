@@ -3,21 +3,29 @@
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
+const heap = std.heap;
 const testing = std.testing;
 
 const iteratorz = @import("iteratorz");
 
 const Char = u8;
 const capacity: u3 = 5;
-const Text = iteratorz.vector.Iterator(Char, capacity);
+const Text = iteratorz.vector.This(Char, capacity);
 
 pub fn main() !void {
     const slice: []Char = @constCast("hello");
-    var text = Text.Readable.init(slice);
+
+    var gpa = heap.GeneralPurposeAllocator(.{}){};
+    defer debug.assert(gpa.deinit() == .ok);
+    const allocator = gpa.allocator();
+
+    var text = try Text.Readable.init(allocator, slice);
+    defer text.deinit(allocator);
+    var text_iterator = text.iterator();
     var iterated: [slice.len]Char = undefined;
 
     var i: usize = 0;
-    while (try text.current()) |char| {
+    while (try text_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
@@ -25,7 +33,9 @@ pub fn main() !void {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]Char = undefined;
-    var writable_bytes = Text.Writable.init(&buffer);
-    for (slice) |char| _ = try writable_bytes.current(char);
+    var writable_bytes = try Text.Writable.init(allocator, &buffer);
+    defer writable_bytes.deinit(allocator);
+    var writable_iterator = writable_bytes.iterator();
+    for (slice) |char| _ = try writable_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 }

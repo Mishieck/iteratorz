@@ -27,7 +27,7 @@ fn addExample(
     mod: *std.Build.Module,
 ) void {
     const examples_node = b.addExecutable(.{
-        .name = "examples_" ++ name,
+        .name = "example_" ++ name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("examples/" ++ name ++ ".zig"),
             .target = target,

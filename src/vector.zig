@@ -1,54 +1,88 @@
 //! Data structures for iterating over an array.
 
 const std = @import("std");
+const mem = std.mem;
 const testing = std.testing;
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
 const in = @import("indexable.zig");
+const Mode = @import("mode.zig").Mode;
 
-pub fn Iterator(Value: type, comptime capacity: anytype) type {
+pub fn This(Value: type, comptime capacity: anytype) type {
     return struct {
         pub const ValueType = Value;
         pub const StateType = State;
-        const State = InIt.StateType;
+        const State = InIb.StateType;
         pub const Slice = []Value;
 
         const It = it.Iterator(Value, State);
-        const InIt = in.Iterator(Value, capacity);
-        const In = Indexable(Value, capacity);
-        const VecIb = Iterable(Value, capacity);
+        const Ib = ib.Iterable(Value, State);
+        const InIb = in.Iterable(Value, capacity);
+        const In = in.Indexable(Value, capacity);
+        const VecIn = Indexable(Value, capacity);
 
-        pub const Readable = struct {
-            pub inline fn init(slice: In.Slice) It.Readable.This {
-                return It.Readable.This.init(
-                    @constCast(
-                        &It.Readable.Default.init(VecIb.init(slice, .get).interface).interface,
-                    ),
-                );
-            }
-        };
+        pub const Readable = create(.get);
+        pub const Writable = create(.set);
 
-        pub const Writable = struct {
-            pub inline fn init(slice: In.Slice) It.Writable.This {
-                return It.Writable.This.init(
-                    @constCast(
-                        &It.Writable.Default.init(@constCast(&VecIb.init(slice, .set))).interface,
-                    ),
-                );
-            }
-        };
+        fn create(comptime mode: Mode) type {
+            return struct {
+                const Self = @This();
+                const Iterator = if (mode == .get) It.Readable else It.Writable;
+
+                default_iterator: *Iterator.Default,
+                indexable_iterable: *InIb,
+                vector_indexable: *VecIn,
+
+                /// Creates utilities for a vector. Free memory using `deinit`.
+                pub fn init(gpa: mem.Allocator, slice: VecIn.Slice) !Self {
+                    const vector_indexable = try VecIn.create(gpa, slice, .get);
+                    const indexable_iterable = try InIb.create(gpa, &vector_indexable.interface);
+                    const default_iterator = try Iterator.Default.create(
+                        gpa,
+                        &indexable_iterable.interface,
+                    );
+
+                    return .{
+                        .default_iterator = default_iterator,
+                        .indexable_iterable = indexable_iterable,
+                        .vector_indexable = vector_indexable,
+                    };
+                }
+
+                pub fn deinit(self: *Self, gpa: mem.Allocator) void {
+                    gpa.destroy(self.default_iterator);
+                    gpa.destroy(self.indexable_iterable);
+                    gpa.destroy(self.vector_indexable);
+                }
+
+                pub fn iterator(self: *const Self) Iterator.This {
+                    return .init(&self.default_iterator.interface);
+                }
+
+                pub fn iterable(self: *const Self) Ib {
+                    return .init(&self.indexable_iterable.interface);
+                }
+
+                pub fn indexable(self: *const Self) In {
+                    return .init(&self.vector_indexable.interface);
+                }
+            };
+        }
     };
 }
 
-test Iterator {
-    const Bytes = Iterator(u8, @as(u8, 5));
+test This {
+    const Bytes = This(u8, @as(u8, 5));
+    const allocator = testing.allocator;
 
     const slice: []u8 = @constCast("hello");
-    var readable_bytes = Bytes.Readable.init(slice);
+    var readable_bytes = try Bytes.Readable.init(allocator, slice);
+    defer readable_bytes.deinit(allocator);
+    var readable_iterator = readable_bytes.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
-    while (try readable_bytes.current()) |char| {
+    while (try readable_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
@@ -56,40 +90,31 @@ test Iterator {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]u8 = undefined;
-    var writable_bytes = Bytes.Writable.init(&buffer);
-    for (slice) |char| _ = try writable_bytes.current(char);
+    var writable_bytes = try Bytes.Writable.init(allocator, &buffer);
+    defer writable_bytes.deinit(allocator);
+    var writable_iterator = writable_bytes.iterator();
+    for (slice) |char| _ = try writable_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
-}
-
-pub fn Iterable(Value: type, comptime capacity: anytype) type {
-    return struct {
-        const Self = @This();
-        pub const ValueType = Value;
-        pub const StateType = InIb.StateType;
-        pub const InIb = in.Iterable(Value, capacity);
-        pub const Ib = ib.Iterable(Value, StateType);
-        const VecIn = Indexable(Value, capacity);
-
-        pub inline fn init(slice: VecIn.Slice, mode: in.Mode) Ib {
-            return .init(
-                @constCast(&InIb.init(@constCast(&VecIn.init(slice, mode).interface)).interface),
-            );
-        }
-    };
 }
 
 pub fn Indexable(Value: type, comptime capacity: anytype) type {
     return struct {
         const Self = @This();
         pub const Capacity = @TypeOf(capacity);
-        pub const In = in.Collection(Value, capacity);
+        pub const In = in.Indexable(Value, capacity);
         pub const Interface = In.Interface;
         pub const Slice = []Value;
 
         interface: Interface,
         slice: Slice,
 
-        pub fn init(slice: Slice, mode: in.Mode) Self {
+        pub fn create(gpa: mem.Allocator, slice: Slice, mode: Mode) !*Self {
+            const self = try gpa.create(Self);
+            self.* = .init(slice, mode);
+            return self;
+        }
+
+        pub fn init(slice: Slice, mode: Mode) Self {
             return .{
                 .interface = .{
                     .mode = mode,

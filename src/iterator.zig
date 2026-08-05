@@ -12,6 +12,7 @@
 
 const std = @import("std");
 const testing = std.testing;
+const mem = std.mem;
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
 
@@ -75,7 +76,13 @@ pub fn ReadableIterator(Value: type, State: type) type {
             const Self = @This();
 
             interface: Interface,
-            iterable: *Iterable.Interface,
+            iterable: Iterable,
+
+            pub fn create(gpa: mem.Allocator, iterable: *Iterable.Interface) !*Self {
+                const self = try gpa.create(Self);
+                self.* = .init(iterable);
+                return self;
+            }
 
             pub fn init(iterable: *Iterable.Interface) Self {
                 return .{
@@ -89,25 +96,23 @@ pub fn ReadableIterator(Value: type, State: type) type {
                         .setInitialState = setInitialState,
                         .setFinalState = setFinalState,
                     },
-                    .iterable = iterable,
+                    .iterable = .init(iterable),
                 };
             }
 
             fn previous(iterator: *Interface) anyerror!?Value {
                 const self: *Self = @fieldParentPtr("interface", iterator);
-                var iterable = Iterable.init(self.iterable);
-                _ = iterable.setPreviousState() catch |err| {
+                _ = self.iterable.setPreviousState() catch |err| {
                     return if (err == error.InvalidState) null else err;
                 };
-                return try iterable.getValue();
+                return try self.iterable.getValue();
             }
 
             fn current(iterator: *Interface) anyerror!?Value {
                 const self: *Self = @fieldParentPtr("interface", iterator);
-                var iterable = Iterable.init(self.iterable);
-                if (!try iterable.isStateValid()) return null;
-                const value = try iterable.getValue();
-                _ = iterable.setNextState() catch |err| {
+                if (!try self.iterable.isStateValid()) return null;
+                const value = try self.iterable.getValue();
+                _ = self.iterable.setNextState() catch |err| {
                     if (err != error.InvalidState) return err;
                 };
                 return value;
@@ -115,22 +120,20 @@ pub fn ReadableIterator(Value: type, State: type) type {
 
             fn next(iterator: *Interface) anyerror!?Value {
                 const self: *Self = @fieldParentPtr("interface", iterator);
-                var iterable = Iterable.init(self.iterable);
-                _ = iterable.setNextState() catch |err| {
+                _ = self.iterable.setNextState() catch |err| {
                     return if (err == error.InvalidState) null else err;
                 };
-                const value = try iterable.getValue();
+                const value = try self.iterable.getValue();
                 return value;
             }
 
             fn at(iterator: *Interface, state: State) anyerror!?Value {
                 const self: *Self = @fieldParentPtr("interface", iterator);
-                var iterable = Iterable.init(self.iterable);
-                _ = iterable.setState(state) catch |err| {
+                _ = self.iterable.setState(state) catch |err| {
                     return if (err == error.InvalidState) null else err;
                 };
-                const value = try iterable.getValue();
-                _ = iterable.setNextState() catch |err| {
+                const value = try self.iterable.getValue();
+                _ = self.iterable.setNextState() catch |err| {
                     if (err != error.InvalidState) return err;
                 };
                 return value;
@@ -138,24 +141,24 @@ pub fn ReadableIterator(Value: type, State: type) type {
 
             fn getState(iterator: *Interface) anyerror!State {
                 var self: *Self = @fieldParentPtr("interface", iterator);
-                return self.iterable.getState(self.iterable);
+                return self.iterable.getState();
             }
 
             fn setState(iterator: *Interface, state: State) anyerror!*Interface {
                 var self: *Self = @fieldParentPtr("interface", iterator);
-                _ = try self.iterable.setState(self.iterable, state);
+                _ = try self.iterable.setState(state);
                 return iterator;
             }
 
             fn setInitialState(iterator: *Interface) anyerror!*Interface {
                 var self: *Self = @fieldParentPtr("interface", iterator);
-                _ = try self.iterable.setInitialState(self.iterable);
+                _ = try self.iterable.setInitialState();
                 return iterator;
             }
 
             fn setFinalState(iterator: *Interface) anyerror!*Interface {
                 var self: *Self = @fieldParentPtr("interface", iterator);
-                _ = try self.iterable.setFinalState(self.iterable);
+                _ = try self.iterable.setFinalState();
                 return iterator;
             }
         };
@@ -201,10 +204,6 @@ pub fn ReadableIterator(Value: type, State: type) type {
             pub fn setFinalState(self: *Self) anyerror!*Self {
                 _ = try self.interface.setFinalState(self.interface);
                 return self;
-            }
-
-            pub inline fn to(self: *Self, Other: type) *Infer(Other).Readable.This {
-                return Other.from(self.interface);
             }
         };
     };
@@ -253,9 +252,15 @@ pub fn WritableIterator(Value: type, State: type) type {
             const Self = @This();
 
             interface: Interface,
-            iterable: *Iterable,
+            iterable: Iterable,
 
-            pub fn init(iterable: *Iterable) Self {
+            pub fn create(gpa: mem.Allocator, iterable: *Iterable.Interface) !*Self {
+                const self = try gpa.create(Self);
+                self.* = .init(iterable);
+                return self;
+            }
+
+            pub fn init(iterable: *Iterable.Interface) Self {
                 return .{
                     .interface = .{
                         .previous = previous,
@@ -267,7 +272,7 @@ pub fn WritableIterator(Value: type, State: type) type {
                         .setInitialState = setInitialState,
                         .setFinalState = setFinalState,
                     },
-                    .iterable = iterable,
+                    .iterable = .init(iterable),
                 };
             }
 
@@ -380,10 +385,6 @@ pub fn WritableIterator(Value: type, State: type) type {
             pub fn setFinalState(self: *Self) anyerror!*Self {
                 _ = try self.interface.setFinalState(self.interface);
                 return self;
-            }
-
-            pub inline fn to(self: *Self, Other: type) *Infer(Other).Writable.This {
-                return Other.from(self.interface);
             }
         };
     };

@@ -3,13 +3,15 @@
 
 const std = @import("std");
 const debug = std.debug;
+const mem = std.mem;
 const testing = std.testing;
 
 const ib = @import("iterable.zig");
 const it = @import("iterator.zig");
 const vec = @import("vector.zig");
+const Mode = @import("mode.zig").Mode;
 
-pub fn Iterator(Value: type, comptime size: anytype) type {
+pub fn This(Value: type, comptime size: anytype) type {
     return struct {
         const Size = @TypeOf(size);
         pub const ValueType = Value;
@@ -17,44 +19,68 @@ pub fn Iterator(Value: type, comptime size: anytype) type {
 
         const ScIb = Iterable(Value, size);
         const Ib = ib.Iterable(Value, StateType);
+        const It = it.Iterator(Value, StateType);
 
-        pub const Readable = struct {
-            const It = it.Iterator(Value, StateType).Readable;
+        pub const Readable = create(.get);
+        pub const Writable = create(.set);
 
-            pub inline fn init() It.This {
-                return It.This.init(
-                    @constCast(&It.Default.init(@constCast(&ScIb.init().interface)).interface),
-                );
-            }
-        };
+        fn create(mode: Mode) type {
+            return struct {
+                const Self = @This();
+                const Iterator = if (mode == .get) It.Readable else It.Writable;
 
-        pub const Writable = struct {
-            const It = it.Iterator(Value, StateType).Writable;
+                default_iterator: *Iterator.Default,
+                scalar_iterable: *ScIb,
 
-            pub inline fn init() It.This {
-                var iterable = Ib.init(@constCast(&ScIb.init().interface));
-                var default = It.Default.init(&iterable);
-                return It.This.init(&default.interface);
-            }
-        };
+                /// Creates utilities for a scalar. Free memory using `deinit`.
+                pub fn init(gpa: mem.Allocator) !Self {
+                    const scalar_iterable = try ScIb.create(gpa);
+                    const default_iterator = try Iterator.Default.create(
+                        gpa,
+                        &scalar_iterable.interface,
+                    );
+
+                    return .{
+                        .default_iterator = default_iterator,
+                        .scalar_iterable = scalar_iterable,
+                    };
+                }
+
+                pub fn deinit(self: *Self, gpa: mem.Allocator) void {
+                    gpa.destroy(self.default_iterator);
+                    gpa.destroy(self.scalar_iterable);
+                }
+
+                pub fn iterator(self: *const Self) Iterator.This {
+                    return .init(&self.default_iterator.interface);
+                }
+
+                pub fn iterable(self: *const Self) Ib {
+                    return .init(&self.scalar_iterable.interface);
+                }
+            };
+        }
     };
 }
 
-test Iterator {
-    const U2 = Iterator(u2, 4);
+test This {
+    const U2 = This(u2, 4);
     const S = U2.StateType;
-    var scalar = U2.Readable.init();
+    const allocator = testing.allocator;
+    var scalar = try U2.Readable.init(allocator);
+    defer scalar.deinit(allocator);
+    var iterator = scalar.iterator();
 
     for (0..4) |i| {
-        const value = try scalar.current();
+        const value = try iterator.current();
         try testing.expect(value != null);
         try testing.expectEqual(i, value.?);
     }
 
-    try testing.expectEqualDeep(S.overflow, try scalar.getState());
-    _ = try scalar.setInitialState();
-    try testing.expectEqual(null, try scalar.previous());
-    try testing.expectEqual(S.underflow, scalar.getState());
+    try testing.expectEqualDeep(S.overflow, try iterator.getState());
+    _ = try iterator.setInitialState();
+    try testing.expectEqual(null, try iterator.previous());
+    try testing.expectEqual(S.underflow, iterator.getState());
 }
 
 pub fn Iterable(Value: type, comptime size: u16) type {
@@ -67,6 +93,12 @@ pub fn Iterable(Value: type, comptime size: u16) type {
 
         interface: Interface,
         state: StateType = .initial,
+
+        pub fn create(gpa: mem.Allocator) !*Self {
+            const self = try gpa.create(Self);
+            self.* = .init();
+            return self;
+        }
 
         pub fn init() Self {
             return .{

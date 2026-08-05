@@ -6,23 +6,33 @@
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
+const heap = std.heap;
 const testing = std.testing;
 
 const iteratorz = @import("iteratorz");
 
 const Char = u8;
 const capacity: u3 = 5;
-const Text = iteratorz.vector.Iterator(Char, capacity);
-const Uppercase = iteratorz.map.Readable(Text, toUppercase);
+const Text = iteratorz.vector.This(Char, capacity);
+const Uppercase = iteratorz.map.This(Text, toUppercase);
 
 pub fn main() !void {
     const slice: []Char = @constCast("hello");
-    var text = Text.Readable.init(slice);
-    var uppercase = text.to(Uppercase);
+
+    var gpa = heap.GeneralPurposeAllocator(.{}){};
+    defer debug.assert(gpa.deinit() == .ok);
+    const allocator = gpa.allocator();
+
+    var text = try Text.Readable.init(allocator, slice);
+    defer text.deinit(allocator);
+    const text_iterator = text.iterator();
+    var uppercase = try Uppercase.Readable.init(allocator, text_iterator.interface);
+    defer uppercase.deinit(allocator);
+    var uppercase_iterator = uppercase.iterator();
     var iterated: [slice.len]Char = undefined;
 
     var i: usize = 0;
-    while (try uppercase.current()) |char| {
+    while (try uppercase_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
