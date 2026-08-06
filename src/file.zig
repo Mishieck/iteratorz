@@ -345,10 +345,10 @@ fn testIterator(operation: Mode.Operation) !void {
 
     var buffer: [slice.len]u8 = undefined;
     const File = This(buffer_capacity);
-    var setter_file = try File.Setter.init(allocator, file, &buffer, operation);
-    defer setter_file.deinit(allocator);
-    var buffered_indexable = setter_file.buffered_indexable;
-    var setter_iterator = setter_file.iterator();
+    var file_setter = try File.Setter.init(allocator, file, &buffer, operation);
+    defer file_setter.deinit(allocator);
+    var buffered_indexable = file_setter.buffered_indexable;
+    var setter_iterator = file_setter.iterator();
 
     for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
@@ -358,9 +358,9 @@ fn testIterator(operation: Mode.Operation) !void {
     const stat = try file.stat();
     try testing.expectEqual(slice.len, stat.size);
 
-    var getter_file = try File.Getter.init(allocator, file, &buffer, operation);
-    defer getter_file.deinit(allocator);
-    var getter_iterator = getter_file.iterator();
+    var file_getter = try File.Getter.init(allocator, file, &buffer, operation);
+    defer file_getter.deinit(allocator);
+    var getter_iterator = file_getter.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;

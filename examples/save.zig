@@ -29,10 +29,10 @@ pub fn main() !void {
     const text: []Char = @constCast("hello");
 
     var buffer: [text.len]Char = undefined;
-    var setter_file = try Text.Setter.init(allocator, file, &buffer, .streaming);
-    defer setter_file.deinit(allocator);
-    var setter_iterator = setter_file.iterator();
-    var buffered_indexable = setter_file.buffered_indexable;
+    var file_setter = try Text.Setter.init(allocator, file, &buffer, .streaming);
+    defer file_setter.deinit(allocator);
+    var setter_iterator = file_setter.iterator();
+    var buffered_indexable = file_setter.buffered_indexable;
 
     for (text) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(text, &buffer);
@@ -42,9 +42,9 @@ pub fn main() !void {
     const stat = try file.stat();
     try testing.expectEqual(text.len, stat.size);
 
-    var getter_file = try Text.Getter.init(allocator, file, &buffer, .streaming);
-    defer getter_file.deinit(allocator);
-    var getter_iterator = getter_file.iterator();
+    var file_getter = try Text.Getter.init(allocator, file, &buffer, .streaming);
+    defer file_getter.deinit(allocator);
+    var getter_iterator = file_getter.iterator();
     var iterated: [text.len]u8 = undefined;
 
     var i: usize = 0;

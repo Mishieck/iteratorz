@@ -76,9 +76,9 @@ test This {
     const allocator = testing.allocator;
 
     const slice: []u8 = @constCast("hello");
-    var getter_bytes = try Bytes.Getter.init(allocator, slice);
-    defer getter_bytes.deinit(allocator);
-    var getter_iterator = getter_bytes.iterator();
+    var bytes_getter = try Bytes.Getter.init(allocator, slice);
+    defer bytes_getter.deinit(allocator);
+    var getter_iterator = bytes_getter.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
@@ -90,9 +90,9 @@ test This {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]u8 = undefined;
-    var setter_bytes = try Bytes.Setter.init(allocator, &buffer);
-    defer setter_bytes.deinit(allocator);
-    var setter_iterator = setter_bytes.iterator();
+    var bytes_setter = try Bytes.Setter.init(allocator, &buffer);
+    defer bytes_setter.deinit(allocator);
+    var setter_iterator = bytes_setter.iterator();
     for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 }

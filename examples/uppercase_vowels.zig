@@ -25,9 +25,9 @@ pub fn main() !void {
     defer debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var getter_bytes = try Text.Getter.init(allocator, slice);
-    defer getter_bytes.deinit(allocator);
-    const getter_iterator = getter_bytes.iterator();
+    var bytes_getter = try Text.Getter.init(allocator, slice);
+    defer bytes_getter.deinit(allocator);
+    const getter_iterator = bytes_getter.iterator();
     var uppercase = try Uppercase.Getter.init(allocator, getter_iterator.interface);
     defer uppercase.deinit(allocator);
     const uppercase_iterator = uppercase.iterator();

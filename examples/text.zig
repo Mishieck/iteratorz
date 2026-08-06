@@ -33,9 +33,9 @@ pub fn main() !void {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]Char = undefined;
-    var setter_bytes = try Text.Setter.init(allocator, &buffer);
-    defer setter_bytes.deinit(allocator);
-    var setter_iterator = setter_bytes.iterator();
+    var bytes_setter = try Text.Setter.init(allocator, &buffer);
+    defer bytes_setter.deinit(allocator);
+    var setter_iterator = bytes_setter.iterator();
     for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 }
