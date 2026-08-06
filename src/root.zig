@@ -3,6 +3,7 @@ pub const iterable = @import("iterable.zig");
 pub const iterator = @import("iterator.zig");
 pub const scalar = @import("scalar.zig");
 pub const vector = @import("vector.zig");
+pub const memory = @import("memory.zig");
 pub const buffered = @import("buffered.zig");
 pub const file = @import("file.zig");
 // pub const filter = @import("filter.zig");
@@ -16,6 +17,7 @@ test {
     _ = iterable;
     _ = scalar;
     _ = vector;
+    _ = memory;
     _ = file;
     _ = buffered;
     _ = iterator;
