@@ -20,8 +20,8 @@ pub fn Iterator(Value: type, State: type) type {
     return struct {
         pub const ValueType = Value;
         pub const StateType = State;
-        pub const Readable = ReadableIterator(Value, State);
-        pub const Writable = WritableIterator(Value, State);
+        pub const Getter = GetterIterator(Value, State);
+        pub const Setter = SetterIterator(Value, State);
     };
 }
 
@@ -33,7 +33,7 @@ pub fn Infer(It: type) type {
     return Iterator(It.ValueType, It.StateType);
 }
 
-pub fn ReadableIterator(Value: type, State: type) type {
+pub fn GetterIterator(Value: type, State: type) type {
     return struct {
         const Iterable = ib.Iterable(Value, State);
 
@@ -209,7 +209,7 @@ pub fn ReadableIterator(Value: type, State: type) type {
     };
 }
 
-pub fn WritableIterator(Value: type, State: type) type {
+pub fn SetterIterator(Value: type, State: type) type {
     return struct {
         const Iterable = ib.Iterable(Value, State);
 

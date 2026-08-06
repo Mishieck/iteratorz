@@ -21,13 +21,13 @@ pub fn This(Value: type, comptime capacity: anytype) type {
         const In = in.Indexable(Value, capacity);
         const VecIn = Indexable(Value, capacity);
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         fn create(comptime mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
 
                 default_iterator: *Iterator.Default,
                 indexable_iterable: *InIb,
@@ -76,13 +76,13 @@ test This {
     const allocator = testing.allocator;
 
     const slice: []u8 = @constCast("hello");
-    var readable_bytes = try Bytes.Readable.init(allocator, slice);
-    defer readable_bytes.deinit(allocator);
-    var readable_iterator = readable_bytes.iterator();
+    var getter_bytes = try Bytes.Getter.init(allocator, slice);
+    defer getter_bytes.deinit(allocator);
+    var getter_iterator = getter_bytes.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
-    while (try readable_iterator.current()) |char| {
+    while (try getter_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }
@@ -90,10 +90,10 @@ test This {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]u8 = undefined;
-    var writable_bytes = try Bytes.Writable.init(allocator, &buffer);
-    defer writable_bytes.deinit(allocator);
-    var writable_iterator = writable_bytes.iterator();
-    for (slice) |char| _ = try writable_iterator.current(char);
+    var setter_bytes = try Bytes.Setter.init(allocator, &buffer);
+    defer setter_bytes.deinit(allocator);
+    var setter_iterator = setter_bytes.iterator();
+    for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 }
 

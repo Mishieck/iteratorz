@@ -21,13 +21,13 @@ pub fn This(Value: type, comptime size: anytype) type {
         const Ib = ib.Iterable(Value, StateType);
         const It = it.Iterator(Value, StateType);
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         fn create(mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
 
                 default_iterator: *Iterator.Default,
                 scalar_iterable: *ScIb,
@@ -67,7 +67,7 @@ test This {
     const U2 = This(u2, 4);
     const S = U2.StateType;
     const allocator = testing.allocator;
-    var scalar = try U2.Readable.init(allocator);
+    var scalar = try U2.Getter.init(allocator);
     defer scalar.deinit(allocator);
     var iterator = scalar.iterator();
 

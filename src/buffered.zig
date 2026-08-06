@@ -21,13 +21,13 @@ pub fn This(Value: type, comptime capacity: anytype, comptime buffer_capacity: a
         const State = InIb.StateType;
         pub const StateType = State;
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         pub fn create(mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
 
                 default_iterator: *Iterator.Default,
                 indexable_iterable: *BufIn,

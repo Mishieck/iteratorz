@@ -19,20 +19,20 @@ pub fn This(BaseIterator: type, predicate: anytype) type {
         pub const State = BaseIterator.StateType;
         pub const ValueType = Value;
         pub const StateType = State;
-        pub const ReadableIterator = It.Readable.Interface;
+        pub const GetterIterator = It.Getter.Interface;
         pub const Predicate = fn (value: Value) anyerror!bool;
         const isMatch: Predicate = predicate;
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         pub fn create(mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
-                const Base = if (mode == .get) It.Readable else It.Writable;
-                const Rm = ReadableFilter(BaseIterator, isMatch);
-                const Wm = WritableFilter(BaseIterator, isMatch);
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
+                const Base = if (mode == .get) It.Getter else It.Setter;
+                const Rm = GetterFilter(BaseIterator, isMatch);
+                const Wm = SetterFilter(BaseIterator, isMatch);
                 const FilterIterator = if (mode == .get) Rm else Wm;
 
                 filter_iterator: *FilterIterator,
@@ -54,7 +54,7 @@ pub fn This(BaseIterator: type, predicate: anytype) type {
     };
 }
 
-pub fn ReadableFilter(BaseIterator: type, predicate: anytype) type {
+pub fn GetterFilter(BaseIterator: type, predicate: anytype) type {
     return struct {
         const Self = @This();
         pub const Iterator = it.Iterator(Value, State);
@@ -62,14 +62,14 @@ pub fn ReadableFilter(BaseIterator: type, predicate: anytype) type {
         pub const State = BaseIterator.StateType;
         pub const ValueType = Value;
         pub const StateType = State;
-        pub const ReadableIterator = Iterator.Readable.Interface;
+        pub const GetterIterator = Iterator.Getter.Interface;
         pub const Predicate = fn (value: Value) anyerror!bool;
         const isMatch: Predicate = predicate;
 
-        interface: ReadableIterator,
-        base_iterator: *ReadableIterator,
+        interface: GetterIterator,
+        base_iterator: *GetterIterator,
 
-        pub fn init(base_iterator: *ReadableIterator) Self {
+        pub fn init(base_iterator: *GetterIterator) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -85,28 +85,28 @@ pub fn ReadableFilter(BaseIterator: type, predicate: anytype) type {
             };
         }
 
-        fn previous(iterator: *ReadableIterator) anyerror!?Value {
+        fn previous(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             return while (try self.base_iterator.previous(self.base_iterator)) |value| {
                 if (try isMatch(value)) break value;
             } else null;
         }
 
-        fn current(iterator: *ReadableIterator) anyerror!?Value {
+        fn current(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             return while (try self.base_iterator.current(self.base_iterator)) |value| {
                 if (try isMatch(value)) break value;
             } else null;
         }
 
-        fn next(iterator: *ReadableIterator) anyerror!?Value {
+        fn next(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             return while (try self.base_iterator.next(self.base_iterator)) |value| {
                 if (try isMatch(value)) break value;
             } else null;
         }
 
-        fn at(iterator: *ReadableIterator, state: State) anyerror!?Value {
+        fn at(iterator: *GetterIterator, state: State) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             if (try self.base_iterator.at(self.base_iterator, state)) |value| {
                 if (try isMatch(value)) return value;
@@ -117,24 +117,24 @@ pub fn ReadableFilter(BaseIterator: type, predicate: anytype) type {
             } else null;
         }
 
-        pub fn getState(iterator: *ReadableIterator) anyerror!State {
+        pub fn getState(iterator: *GetterIterator) anyerror!State {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return self.base_iterator.getState(self.base_iterator);
         }
 
-        pub fn setState(iterator: *ReadableIterator, state: State) anyerror!*ReadableIterator {
+        pub fn setState(iterator: *GetterIterator, state: State) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setState(self.base_iterator, state);
             return iterator;
         }
 
-        pub fn setInitialState(iterator: *ReadableIterator) anyerror!*ReadableIterator {
+        pub fn setInitialState(iterator: *GetterIterator) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setInitialState(self.base_iterator);
             return iterator;
         }
 
-        pub fn setFinalState(iterator: *ReadableIterator) anyerror!*ReadableIterator {
+        pub fn setFinalState(iterator: *GetterIterator) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
@@ -142,18 +142,18 @@ pub fn ReadableFilter(BaseIterator: type, predicate: anytype) type {
     };
 }
 
-test ReadableFilter {
+test GetterFilter {
     const Value = u8;
     const capacity = 5;
     const VecIt = vec.This(Value, capacity);
     const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
-    const Filter = This(It, isVowel).Readable;
+    const Filter = This(It, isVowel).Getter;
 
     const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const vowels = "eo";
-    var vector = try VecIt.Readable.init(allocator, slice);
+    var vector = try VecIt.Getter.init(allocator, slice);
     var filter = try Filter.init(allocator, vector.iterator().interface);
     var iter = filter.iterator();
     var iterated: [slice.len]u8 = undefined;
@@ -173,7 +173,7 @@ fn isVowel(char: u8) anyerror!bool {
     } else false;
 }
 
-pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
+pub fn SetterFilter(BaseIterator: type, predicate: anytype) type {
     return struct {
         const Self = @This();
         pub const Iterator = it.Iterator(BaseIterator.ValueType, BaseIterator.StateType);
@@ -181,14 +181,14 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
         pub const StateType = State;
         pub const Value = Iterator.ValueType;
         pub const State = Iterator.StateType;
-        pub const WritableIterator = Iterator.Writable.Interface;
+        pub const SetterIterator = Iterator.Setter.Interface;
         pub const Predicate = fn (value: Value) anyerror!bool;
         const isMatch: Predicate = predicate;
 
-        interface: WritableIterator,
-        base_iterator: *WritableIterator,
+        interface: SetterIterator,
+        base_iterator: *SetterIterator,
 
-        pub fn init(base_iterator: *WritableIterator) Self {
+        pub fn init(base_iterator: *SetterIterator) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -204,7 +204,7 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
             };
         }
 
-        fn previous(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn previous(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return if (try isMatch(value)) set: {
                 const base_iterator = try self.base_iterator.previous(self.base_iterator, value);
@@ -212,7 +212,7 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
             } else null;
         }
 
-        fn current(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn current(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return if (try isMatch(value)) set: {
                 const base_iterator = try self.base_iterator.current(self.base_iterator, value);
@@ -220,7 +220,7 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
             } else null;
         }
 
-        fn next(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn next(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return if (try isMatch(value)) set: {
                 const base_iterator = try self.base_iterator.next(self.base_iterator, value);
@@ -228,7 +228,7 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
             } else null;
         }
 
-        fn at(iterator: *WritableIterator, state: State, value: Value) anyerror!?*WritableIterator {
+        fn at(iterator: *SetterIterator, state: State, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return if (try isMatch(value)) set: {
                 const base_iterator = try self.base_iterator.at(self.base_iterator, state, value);
@@ -236,24 +236,24 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
             } else null;
         }
 
-        fn getState(iterator: *WritableIterator) anyerror!State {
+        fn getState(iterator: *SetterIterator) anyerror!State {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return self.base_iterator.getState(self.base_iterator);
         }
 
-        fn setState(iterator: *WritableIterator, state: State) anyerror!*WritableIterator {
+        fn setState(iterator: *SetterIterator, state: State) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setState(self.base_iterator, state);
             return iterator;
         }
 
-        fn setInitialState(iterator: *WritableIterator) anyerror!*WritableIterator {
+        fn setInitialState(iterator: *SetterIterator) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setInitialState(self.base_iterator);
             return iterator;
         }
 
-        fn setFinalState(iterator: *WritableIterator) anyerror!*WritableIterator {
+        fn setFinalState(iterator: *SetterIterator) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
@@ -261,19 +261,19 @@ pub fn WritableFilter(BaseIterator: type, predicate: anytype) type {
     };
 }
 
-test WritableFilter {
+test SetterFilter {
     const Value = u8;
     const capacity = 5;
     const VecIt = vec.This(Value, capacity);
     const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
-    const Filter = This(It, isVowel).Writable;
+    const Filter = This(It, isVowel).Setter;
 
     const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const vowels = "eo";
     var buffer: [slice.len]u8 = undefined;
-    var vector = try VecIt.Writable.init(allocator, slice);
+    var vector = try VecIt.Setter.init(allocator, slice);
     var filter = try Filter.init(allocator, vector.iterator().interface);
     var iter = filter.iterator();
 

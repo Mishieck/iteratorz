@@ -38,14 +38,14 @@ pub fn This(buffer_capacity: anytype) type {
         const FiIn = Indexable(buffer_capacity);
         const Buf = buf.This(Value, capacity, buffer_capacity);
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         pub fn create(mode: mo.Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
-                const Buffered = if (mode == .get) Buf.Readable else Buf.Writable;
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
+                const Buffered = if (mode == .get) Buf.Getter else Buf.Setter;
 
                 default_iterator: *Iterator.Default,
                 indexable_iterable: *InIb,
@@ -345,12 +345,12 @@ fn testIterator(operation: Mode.Operation) !void {
 
     var buffer: [slice.len]u8 = undefined;
     const File = This(buffer_capacity);
-    var writable_file = try File.Writable.init(allocator, file, &buffer, operation);
-    defer writable_file.deinit(allocator);
-    var buffered_indexable = writable_file.buffered_indexable;
-    var writable_iterator = writable_file.iterator();
+    var setter_file = try File.Setter.init(allocator, file, &buffer, operation);
+    defer setter_file.deinit(allocator);
+    var buffered_indexable = setter_file.buffered_indexable;
+    var setter_iterator = setter_file.iterator();
 
-    for (slice) |char| _ = try writable_iterator.current(char);
+    for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 
     _ = try buffered_indexable.flush();
@@ -358,13 +358,13 @@ fn testIterator(operation: Mode.Operation) !void {
     const stat = try file.stat();
     try testing.expectEqual(slice.len, stat.size);
 
-    var readable_file = try File.Readable.init(allocator, file, &buffer, operation);
-    defer readable_file.deinit(allocator);
-    var readable_iterator = readable_file.iterator();
+    var getter_file = try File.Getter.init(allocator, file, &buffer, operation);
+    defer getter_file.deinit(allocator);
+    var getter_iterator = getter_file.iterator();
     var iterated: [slice.len]u8 = undefined;
 
     var i: usize = 0;
-    while (try readable_iterator.current()) |char| {
+    while (try getter_iterator.current()) |char| {
         iterated[i] = char;
         i += 1;
     }

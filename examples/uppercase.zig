@@ -23,10 +23,10 @@ pub fn main() !void {
     defer debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var text = try Text.Readable.init(allocator, slice);
+    var text = try Text.Getter.init(allocator, slice);
     defer text.deinit(allocator);
     const text_iterator = text.iterator();
-    var uppercase = try Uppercase.Readable.init(allocator, text_iterator.interface);
+    var uppercase = try Uppercase.Getter.init(allocator, text_iterator.interface);
     defer uppercase.deinit(allocator);
     var uppercase_iterator = uppercase.iterator();
     var iterated: [slice.len]Char = undefined;

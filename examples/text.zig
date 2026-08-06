@@ -19,7 +19,7 @@ pub fn main() !void {
     defer debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var text = try Text.Readable.init(allocator, slice);
+    var text = try Text.Getter.init(allocator, slice);
     defer text.deinit(allocator);
     var text_iterator = text.iterator();
     var iterated: [slice.len]Char = undefined;
@@ -33,9 +33,9 @@ pub fn main() !void {
     try testing.expectEqualStrings(slice, &iterated);
 
     var buffer: [slice.len]Char = undefined;
-    var writable_bytes = try Text.Writable.init(allocator, &buffer);
-    defer writable_bytes.deinit(allocator);
-    var writable_iterator = writable_bytes.iterator();
-    for (slice) |char| _ = try writable_iterator.current(char);
+    var setter_bytes = try Text.Setter.init(allocator, &buffer);
+    defer setter_bytes.deinit(allocator);
+    var setter_iterator = setter_bytes.iterator();
+    for (slice) |char| _ = try setter_iterator.current(char);
     try testing.expectEqualStrings(slice, &buffer);
 }

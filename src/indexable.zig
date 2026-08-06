@@ -23,13 +23,13 @@ pub fn This(Value: type, comptime capacity: anytype) type {
         const Ib = ib.Iterable(Value, StateType);
         const It = it.Iterator(Value, State);
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         pub fn create(mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
 
                 default_iterator: *Iterator.Default,
                 indexable_iterable: *InIb,
@@ -70,8 +70,8 @@ pub fn This(Value: type, comptime capacity: anytype) type {
 
 test This {
     const It = This(u8, 16);
-    _ = It.Readable;
-    _ = It.Writable;
+    _ = It.Getter;
+    _ = It.Setter;
 }
 
 pub fn Iterable(Value: type, comptime capacity: anytype) type {

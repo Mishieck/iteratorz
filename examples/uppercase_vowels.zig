@@ -25,13 +25,13 @@ pub fn main() !void {
     defer debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var readable_bytes = try Text.Readable.init(allocator, slice);
-    defer readable_bytes.deinit(allocator);
-    const readable_iterator = readable_bytes.iterator();
-    var uppercase = try Uppercase.Readable.init(allocator, readable_iterator.interface);
+    var getter_bytes = try Text.Getter.init(allocator, slice);
+    defer getter_bytes.deinit(allocator);
+    const getter_iterator = getter_bytes.iterator();
+    var uppercase = try Uppercase.Getter.init(allocator, getter_iterator.interface);
     defer uppercase.deinit(allocator);
     const uppercase_iterator = uppercase.iterator();
-    var vowels = try Vowels.Readable.init(allocator, uppercase_iterator.interface);
+    var vowels = try Vowels.Getter.init(allocator, uppercase_iterator.interface);
     defer vowels.deinit(allocator);
     var vowels_iterator = vowels.iterator();
     var iterated: [slice.len]Char = undefined;

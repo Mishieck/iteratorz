@@ -24,16 +24,16 @@ pub fn This(BaseIterator: type, map: anytype) type {
         pub const Map = fn (value: BaseValue) ReturnType;
         const mapValue: Map = map;
 
-        pub const Readable = create(.get);
-        pub const Writable = create(.set);
+        pub const Getter = create(.get);
+        pub const Setter = create(.set);
 
         pub fn create(mode: Mode) type {
             return struct {
                 const Self = @This();
-                const Iterator = if (mode == .get) It.Readable else It.Writable;
-                const Base = if (mode == .get) BaIt.Readable else BaIt.Writable;
-                const Rm = ReadableMap(BaseIterator, map);
-                const Wm = WritableMap(BaseIterator, map);
+                const Iterator = if (mode == .get) It.Getter else It.Setter;
+                const Base = if (mode == .get) BaIt.Getter else BaIt.Setter;
+                const Rm = GetterMap(BaseIterator, map);
+                const Wm = SetterMap(BaseIterator, map);
                 const MapIterator = if (mode == .get) Rm else Wm;
 
                 map_iterator: *MapIterator,
@@ -55,7 +55,7 @@ pub fn This(BaseIterator: type, map: anytype) type {
     };
 }
 
-pub fn ReadableMap(BaseIterator: type, map: anytype) type {
+pub fn GetterMap(BaseIterator: type, map: anytype) type {
     return struct {
         const Self = @This();
         const ReturnType = @typeInfo(@TypeOf(map)).@"fn".return_type.?;
@@ -66,20 +66,20 @@ pub fn ReadableMap(BaseIterator: type, map: anytype) type {
         pub const State = BaseIterator.StateType;
         const BaIt = it.Iterator(BaseValue, State);
         pub const Iterator = it.Iterator(Value, State);
-        pub const ReadableIterator = Iterator.Readable.Interface;
+        pub const GetterIterator = Iterator.Getter.Interface;
         pub const Map = fn (value: BaseValue) ReturnType;
         const mapValue: Map = map;
 
-        interface: ReadableIterator,
-        base_iterator: *BaIt.Readable.Interface,
+        interface: GetterIterator,
+        base_iterator: *BaIt.Getter.Interface,
 
-        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Readable.Interface) !*Self {
+        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Getter.Interface) !*Self {
             const self = try gpa.create(Self);
             self.* = .init(base_iterator);
             return self;
         }
 
-        pub fn init(base_iterator: *BaIt.Readable.Interface) Self {
+        pub fn init(base_iterator: *BaIt.Getter.Interface) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -95,48 +95,48 @@ pub fn ReadableMap(BaseIterator: type, map: anytype) type {
             };
         }
 
-        fn previous(iterator: *ReadableIterator) anyerror!?Value {
+        fn previous(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             const value = try self.base_iterator.previous(self.base_iterator);
             return if (value) |v| try mapValue(v) else null;
         }
 
-        fn current(iterator: *ReadableIterator) anyerror!?Value {
+        fn current(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             const value = try self.base_iterator.current(self.base_iterator);
             return if (value) |v| try mapValue(v) else null;
         }
 
-        fn next(iterator: *ReadableIterator) anyerror!?Value {
+        fn next(iterator: *GetterIterator) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             const value = try self.base_iterator.next(self.base_iterator);
             return if (value) |v| try mapValue(v) else null;
         }
 
-        fn at(iterator: *ReadableIterator, state: State) anyerror!?Value {
+        fn at(iterator: *GetterIterator, state: State) anyerror!?Value {
             var self: *Self = @fieldParentPtr("interface", iterator);
             const value = try self.base_iterator.at(self.base_iterator, state);
             return if (value) |v| try mapValue(v) else null;
         }
 
-        pub fn getState(iterator: *ReadableIterator) anyerror!State {
+        pub fn getState(iterator: *GetterIterator) anyerror!State {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return self.base_iterator.getState(self.base_iterator);
         }
 
-        pub fn setState(iterator: *ReadableIterator, state: State) anyerror!*ReadableIterator {
+        pub fn setState(iterator: *GetterIterator, state: State) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setState(self.base_iterator, state);
             return iterator;
         }
 
-        pub fn setInitialState(iterator: *ReadableIterator) anyerror!*ReadableIterator {
+        pub fn setInitialState(iterator: *GetterIterator) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setInitialState(self.base_iterator);
             return iterator;
         }
 
-        pub fn setFinalState(iterator: *ReadableIterator) anyerror!*ReadableIterator {
+        pub fn setFinalState(iterator: *GetterIterator) anyerror!*GetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
@@ -144,7 +144,7 @@ pub fn ReadableMap(BaseIterator: type, map: anytype) type {
     };
 }
 
-test ReadableMap {
+test GetterMap {
     const Value = u8;
     const capacity: u8 = 5;
     const VecIt = vec.This(Value, capacity);
@@ -155,9 +155,9 @@ test ReadableMap {
     const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
-    var vector = try VecIt.Readable.init(allocator, slice);
+    var vector = try VecIt.Getter.init(allocator, slice);
     defer vector.deinit(allocator);
-    var map = try Map.Readable.init(allocator, vector.iterator().interface);
+    var map = try Map.Getter.init(allocator, vector.iterator().interface);
     defer map.deinit(allocator);
     var iter = map.iterator();
     var iterated: [slice.len]u8 = undefined;
@@ -171,7 +171,7 @@ test ReadableMap {
     try testing.expectEqualStrings(capitalized, &iterated);
 }
 
-pub fn WritableMap(BaseIterator: type, map: anytype) type {
+pub fn SetterMap(BaseIterator: type, map: anytype) type {
     return struct {
         const Self = @This();
         pub const BaseValue = BaseIterator.ValueType;
@@ -181,20 +181,20 @@ pub fn WritableMap(BaseIterator: type, map: anytype) type {
         pub const State = BaseIterator.StateType;
         const BaIt = it.Iterator(BaseValue, State);
         pub const Iterator = it.Iterator(Value, State);
-        pub const WritableIterator = Iterator.Writable.Interface;
+        pub const SetterIterator = Iterator.Setter.Interface;
         pub const Map = fn (value: Value) anyerror!BaseValue;
         const mapValue: Map = map;
 
-        interface: WritableIterator,
-        base_iterator: *BaIt.Writable.Interface,
+        interface: SetterIterator,
+        base_iterator: *BaIt.Setter.Interface,
 
-        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Writable.Interface) !*Self {
+        pub fn create(gpa: mem.Allocator, base_iterator: *BaIt.Setter.Interface) !*Self {
             const self = try gpa.create(Self);
             self.* = .init(base_iterator);
             return self;
         }
 
-        pub fn init(base_iterator: *BaIt.Writable.Interface) Self {
+        pub fn init(base_iterator: *BaIt.Setter.Interface) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -210,48 +210,48 @@ pub fn WritableMap(BaseIterator: type, map: anytype) type {
             };
         }
 
-        fn previous(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn previous(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             const result = try self.base_iterator.previous(self.base_iterator, try mapValue(value));
             return if (result) |_| iterator else null;
         }
 
-        fn current(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn current(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             const result = try self.base_iterator.current(self.base_iterator, try mapValue(value));
             return if (result) |_| iterator else null;
         }
 
-        fn next(iterator: *WritableIterator, value: Value) anyerror!?*WritableIterator {
+        fn next(iterator: *SetterIterator, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             const result = try self.base_iterator.next(self.base_iterator, try mapValue(value));
             return if (result) |_| iterator else null;
         }
 
-        fn at(iterator: *WritableIterator, state: State, value: Value) anyerror!?*WritableIterator {
+        fn at(iterator: *SetterIterator, state: State, value: Value) anyerror!?*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             const result = try self.base_iterator.at(self.base_iterator, state, try mapValue(value));
             return if (result) |_| iterator else null;
         }
 
-        fn getState(iterator: *WritableIterator) anyerror!State {
+        fn getState(iterator: *SetterIterator) anyerror!State {
             const self: *Self = @fieldParentPtr("interface", iterator);
             return self.base_iterator.getState(self.base_iterator);
         }
 
-        fn setState(iterator: *WritableIterator, state: State) anyerror!*WritableIterator {
+        fn setState(iterator: *SetterIterator, state: State) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setState(self.base_iterator, state);
             return iterator;
         }
 
-        fn setInitialState(iterator: *WritableIterator) anyerror!*WritableIterator {
+        fn setInitialState(iterator: *SetterIterator) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setInitialState(self.base_iterator);
             return iterator;
         }
 
-        fn setFinalState(iterator: *WritableIterator) anyerror!*WritableIterator {
+        fn setFinalState(iterator: *SetterIterator) anyerror!*SetterIterator {
             const self: *Self = @fieldParentPtr("interface", iterator);
             _ = try self.base_iterator.setFinalState(self.base_iterator);
             return iterator;
@@ -259,19 +259,19 @@ pub fn WritableMap(BaseIterator: type, map: anytype) type {
     };
 }
 
-test WritableMap {
+test SetterMap {
     const Value = u8;
     const capacity: u8 = 5;
     const VecIt = vec.This(Value, capacity);
     const State = VecIt.StateType;
     const It = it.Iterator(Value, State);
-    const Map = This(It, toUppercase).Writable;
+    const Map = This(It, toUppercase).Setter;
 
     const allocator = testing.allocator;
     const slice: []Value = @constCast("hello");
     const capitalized = "HELLO";
     var buffer: [slice.len]u8 = undefined;
-    var vector = try VecIt.Writable.init(allocator, &buffer);
+    var vector = try VecIt.Setter.init(allocator, &buffer);
     defer vector.deinit(allocator);
     var map = try Map.init(allocator, vector.iterator().interface);
     defer map.deinit(allocator);
