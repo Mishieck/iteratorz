@@ -7,6 +7,9 @@ pub const buffered = @import("buffered.zig");
 pub const file = @import("file.zig");
 // pub const filter = @import("filter.zig");
 pub const map = @import("map.zig");
+pub const bytes = @import("bytes.zig");
+pub const codec = @import("codec.zig");
+pub const partition = @import("partition.zig");
 
 test {
     _ = indexable;
@@ -18,4 +21,7 @@ test {
     _ = iterator;
     // _ = filter;
     _ = map;
+    _ = bytes;
+    _ = codec;
+    _ = partition;
 }
