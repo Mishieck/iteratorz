@@ -20,9 +20,17 @@ pub fn This(
     getLength: *const GetLength(BaseIterator),
 ) type {
     return struct {
-        pub const Getter = Encoder(BaseIterator, encode, getLength);
-        pub const Setter = Decoder(BaseIterator, decode, getLength);
+        pub const Getter = Decoder(BaseIterator, decode, getLength);
+        pub const Setter = Encoder(BaseIterator, encode, getLength);
     };
+}
+
+test This {
+    const Vector = vec.This(u8, bytes.u64_capacity);
+    const It = it.Iterator(Vector.ValueType, Vector.StateType);
+    const T = This(It, enc, dec, getU32Length);
+    _ = T.Getter;
+    _ = T.Setter;
 }
 
 pub fn Encoder(
@@ -212,7 +220,7 @@ pub fn enc(setter: *TestSetter.This, value: u32) anyerror!*TestSetter.This {
     return setter;
 }
 
-pub fn Decoder(BaseIterator: type, decode: anytype, getLength: GetLength(BaseIterator)) type {
+pub fn Decoder(BaseIterator: type, decode: anytype, getLength: *const GetLength(BaseIterator)) type {
     return struct {
         const Self = @This();
         pub const ValueType = Value;
