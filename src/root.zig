@@ -11,6 +11,7 @@ pub const map = @import("map.zig");
 pub const bytes = @import("bytes.zig");
 pub const codec = @import("codec.zig");
 pub const partition = @import("partition.zig");
+pub const tokenizer = @import("tokenizer.zig");
 
 test {
     _ = indexable;
@@ -26,4 +27,5 @@ test {
     _ = bytes;
     _ = codec;
     _ = partition;
+    _ = tokenizer;
 }

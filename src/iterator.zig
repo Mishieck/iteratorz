@@ -193,7 +193,8 @@ pub fn GetterIterator(Value: type, State: type) type {
             }
 
             pub fn setState(self: *Self, state: State) anyerror!*Self {
-                return self.interface.setState(self.interface, state);
+                _ = try self.interface.setState(self.interface, state);
+                return self;
             }
 
             pub fn setInitialState(self: *Self) anyerror!*Self {
@@ -373,8 +374,9 @@ pub fn SetterIterator(Value: type, State: type) type {
                 return self.interface.getState(self.interface);
             }
 
-            pub fn setState(self: *Self, state: State) anyerror!State {
-                return self.interface.setState(self.interface, state);
+            pub fn setState(self: *Self, state: State) anyerror!*Self {
+                _ = try self.interface.setState(self.interface, state);
+                return self;
             }
 
             pub fn setInitialState(self: *Self) anyerror!*Self {
