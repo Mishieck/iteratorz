@@ -23,7 +23,7 @@ pub fn This(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 test This {
     const Vector = vec.This(u8, bytes.u64_capacity);
     const It = it.Iterator(Vector.ValueType, Vector.StateType);
-    const T = This(It, getWord);
+    const T = This(It, word_tokenizer);
     _ = T.Getter;
     _ = T.Setter;
 }
@@ -172,7 +172,7 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 
         fn current(iterator: *Interface) anyerror!?Value {
             const self: *Self = @fieldParentPtr("interface", iterator);
-            const slice = try tokenize(self.allocator, &self.getter);
+            const slice = try tokenize.call(self.allocator, &self.getter);
             _ = try self.getter.previous();
             return slice;
         }
@@ -218,7 +218,7 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 test Tokenizer {
     const Vector = vec.This(u8, bytes.u64_capacity);
     const It = it.Iterator(Vector.ValueType, Vector.StateType);
-    const Tk = Tokenizer(It, getWord);
+    const Tk = Tokenizer(It, word_tokenizer);
 
     const allocator = testing.allocator;
     var buffer: [1024]u8 = undefined;
@@ -248,6 +248,8 @@ const TestIterator = it.Iterator(bytes.Byte, scalar.State(u64, bytes.u64_capacit
 const TestGetter = TestIterator.Getter;
 const TestSetter = TestIterator.Setter;
 
+pub const word_tokenizer = Tokenize(TestIterator){ .call = getWord };
+
 pub fn getWord(allocator: mem.Allocator, getter: *TestGetter.This) anyerror!?[]const bytes.Byte {
     if (try getter.current()) |first_char| {
         var list = std.array_list.Managed(bytes.Byte).init(allocator);
@@ -268,6 +270,12 @@ pub fn getWord(allocator: mem.Allocator, getter: *TestGetter.This) anyerror!?[]c
     } else return null;
 }
 
+/// A closure for tokenizing.
 pub fn Tokenize(Iterator: type) type {
-    return fn (allocator: mem.Allocator, iterator: *Iterator.Getter.This) anyerror!?[]const Iterator.ValueType;
+    return struct {
+        call: fn (
+            allocator: mem.Allocator,
+            iterator: *Iterator.Getter.This,
+        ) anyerror!?[]const Iterator.ValueType,
+    };
 }
