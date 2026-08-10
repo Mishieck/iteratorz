@@ -13,9 +13,9 @@ const vec = @import("vector.zig");
 const bytes = @import("bytes.zig");
 const scalar = @import("scalar.zig");
 
-pub fn This(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
+pub fn This(BaseIterator: type) type {
     return struct {
-        pub const Getter = Tokenizer(BaseIterator, tokenize);
+        pub const Getter = Tokenizer(BaseIterator);
         pub const Setter = Detokenizer(BaseIterator);
     };
 }
@@ -23,7 +23,7 @@ pub fn This(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 test This {
     const Vector = vec.This(u8, bytes.u64_capacity);
     const It = it.Iterator(Vector.ValueType, Vector.StateType);
-    const T = This(It, word_tokenizer);
+    const T = This(It);
     _ = T.Getter;
     _ = T.Setter;
 }
@@ -132,7 +132,7 @@ test Detokenizer {
     try testing.expectEqualStrings("Hello, world!", buffer[0..length]);
 }
 
-pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
+pub fn Tokenizer(BaseIterator: type) type {
     return struct {
         const Self = @This();
         pub const ValueType = Value;
@@ -142,12 +142,14 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
         const BaIt = it.Infer(BaseIterator);
         pub const Iterator = it.Iterator(Value, State);
         pub const Interface = Iterator.Getter.Interface;
+        const Tok = Tokenize(BaseIterator);
 
         interface: Interface,
         getter: BaIt.Getter.This,
         allocator: mem.Allocator,
+        tokenize: *Tok,
 
-        pub fn init(allocator: mem.Allocator, getter: *BaIt.Getter.Interface) Self {
+        pub fn init(allocator: mem.Allocator, getter: *BaIt.Getter.Interface, tokenize: *Tok) Self {
             return .{
                 .interface = .{
                     .previous = previous,
@@ -161,6 +163,7 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
                 },
                 .getter = .init(getter),
                 .allocator = allocator,
+                .tokenize = tokenize,
             };
         }
 
@@ -172,7 +175,7 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 
         fn current(iterator: *Interface) anyerror!?Value {
             const self: *Self = @fieldParentPtr("interface", iterator);
-            const slice = try tokenize.call(self.allocator, &self.getter);
+            const slice = try self.tokenize.call(self.tokenize, self.allocator, &self.getter);
             _ = try self.getter.previous();
             return slice;
         }
@@ -218,7 +221,7 @@ pub fn Tokenizer(BaseIterator: type, tokenize: Tokenize(BaseIterator)) type {
 test Tokenizer {
     const Vector = vec.This(u8, bytes.u64_capacity);
     const It = it.Iterator(Vector.ValueType, Vector.StateType);
-    const Tk = Tokenizer(It, word_tokenizer);
+    const Tk = Tokenizer(It);
 
     const allocator = testing.allocator;
     var buffer: [1024]u8 = undefined;
@@ -235,7 +238,7 @@ test Tokenizer {
     var vector_getter = try Vector.Getter.init(allocator, buffer[0..length]);
     defer vector_getter.deinit(allocator);
     const getter = vector_getter.iterator();
-    var tokenizer = Tk.init(allocator, getter.interface);
+    var tokenizer = Tk.init(allocator, getter.interface, @constCast(&word_tokenizer));
     var tokenizer_iterator = Tk.Iterator.Getter.This.init(&tokenizer.interface);
     for (0..values.len) |i| {
         const tokenized = (try tokenizer_iterator.current()).?;
@@ -248,9 +251,15 @@ const TestIterator = it.Iterator(bytes.Byte, scalar.State(u64, bytes.u64_capacit
 const TestGetter = TestIterator.Getter;
 const TestSetter = TestIterator.Setter;
 
-pub const word_tokenizer = Tokenize(TestIterator){ .call = getWord };
+pub const WordTokenizer = Tokenize(TestIterator);
+pub const word_tokenizer = WordTokenizer{ .call = getWord };
 
-pub fn getWord(allocator: mem.Allocator, getter: *TestGetter.This) anyerror!?[]const bytes.Byte {
+pub fn getWord(
+    tokenizer: *WordTokenizer,
+    allocator: mem.Allocator,
+    getter: *TestGetter.This,
+) anyerror!?[]const bytes.Byte {
+    _ = tokenizer;
     if (try getter.current()) |first_char| {
         var list = std.array_list.Managed(bytes.Byte).init(allocator);
         defer list.deinit();
@@ -273,7 +282,10 @@ pub fn getWord(allocator: mem.Allocator, getter: *TestGetter.This) anyerror!?[]c
 /// A closure for tokenizing.
 pub fn Tokenize(Iterator: type) type {
     return struct {
-        call: fn (
+        const Self = @This();
+
+        call: *const fn (
+            self: *Self,
             allocator: mem.Allocator,
             iterator: *Iterator.Getter.This,
         ) anyerror!?[]const Iterator.ValueType,
