@@ -4,6 +4,7 @@
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
+const meta = std.meta;
 const testing = std.testing;
 
 const ib = @import("iterable.zig");
@@ -281,6 +282,16 @@ pub fn State(Value: type, comptime size: anytype) type {
             return switch (self.*) {
                 .valid => |_| true,
                 else => false,
+            };
+        }
+
+        pub fn equals(self: *const Self, other: *const Self) bool {
+            return switch (self.*) {
+                .valid => |v1| switch (other.*) {
+                    .valid => |v2| v1 == v2,
+                    else => false,
+                },
+                else => meta.activeTag(self.*) == meta.activeTag(other.*),
             };
         }
     };
