@@ -176,7 +176,6 @@ pub fn Tokenizer(BaseIterator: type) type {
         fn current(iterator: *Interface) anyerror!?Value {
             const self: *Self = @fieldParentPtr("interface", iterator);
             const slice = try self.tokenize.call(self.tokenize, self.allocator, &self.getter);
-            _ = try self.getter.previous();
             return slice;
         }
 
@@ -267,11 +266,17 @@ pub fn getWord(
 
         if (std.ascii.isAlphanumeric(first_char)) {
             while (try getter.current()) |char| {
-                if (std.ascii.isAlphanumeric(char)) try list.append(char) else break;
+                if (std.ascii.isAlphanumeric(char)) try list.append(char) else {
+                    _ = try getter.previous(); // Set state to start of next token.
+                    break;
+                }
             }
         } else {
             while (try getter.current()) |char| {
-                if (std.ascii.isAlphanumeric(char)) break else try list.append(char);
+                if (std.ascii.isAlphanumeric(char)) {
+                    _ = try getter.previous(); // Set state to start of next token.
+                    break;
+                } else try list.append(char);
             }
         }
 
