@@ -212,7 +212,10 @@ pub fn Indexable(Value: type, comptime capacity: anytype) type {
         }
 
         pub fn size(self: *Self) anyerror!Capacity {
-            return if (self.interface.mode == .get) self.interface.size(self.interface) else capacity;
+            return switch (self.interface.mode) {
+                .get => self.interface.size(self.interface) catch capacity,
+                else => capacity,
+            };
         }
     };
 }
