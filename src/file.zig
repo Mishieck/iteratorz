@@ -260,7 +260,7 @@ pub fn Indexable(buffer_capacity: anytype) type {
                 .read, .write => |operation| switch (operation) {
                     .positional => unreachable,
                     .streaming => |_| s: {
-                        try posix.lseek_SET(self.file.handle, index);
+                        posix.lseek_SET(self.file.handle, index) catch {};
                         break :s self;
                     },
                     .failure => posix.SeekError.Unseekable,
