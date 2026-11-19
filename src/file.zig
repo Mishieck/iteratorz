@@ -129,6 +129,10 @@ pub fn Indexable(buffer_capacity: anytype) type {
         file: fs.File,
         buffer: Slice,
         mode: Mode,
+        streamed_size: Capacity = 0,
+        buffered_size: Capacity = 0,
+        is_stream_only: bool = false,
+        size_has_expired: bool = true,
 
         pub fn create(gpa: mem.Allocator, file: fs.File, buffer: Slice, mode: Mode) !*Self {
             const self = try gpa.create(Self);
@@ -184,13 +188,25 @@ pub fn Indexable(buffer_capacity: anytype) type {
 
         fn size(indexable: *Interface) anyerror!Capacity {
             const self: *Self = @fieldParentPtr("interface", indexable);
+
+            if (self.is_stream_only) {
+                if (self.size_has_expired) {
+                    _ = try self.getStreaming(self.streamed_size);
+                    return self.streamed_size;
+                } else return self.streamed_size;
+            }
+
             if (is_windows) return if (windows.GetFileSizeEx(self.file.handle)) |s| @truncate(s) else |err| err;
-            if (posix.Stat == void) return error.Streaming;
+            if (posix.Stat == void) {
+                self.is_stream_only = true;
+                return size(indexable);
+            }
 
             if (self.file.stat()) |stat| {
                 if (stat.kind == .file) return stat.size else {
                     self.mode = self.mode.toStreaming();
-                    return error.Streaming;
+                    self.is_stream_only = true;
+                    return size(indexable);
                 }
             } else |err| return err;
         }
@@ -216,9 +232,22 @@ pub fn Indexable(buffer_capacity: anytype) type {
         }
 
         pub fn getStreaming(self: *Self, index: Capacity) anyerror!Slice {
-            _ = try self.seekTo(index);
+            if (self.is_stream_only) {
+                if (!self.size_has_expired) {
+                    self.size_has_expired = true;
+                    return self.buffer[0..self.buffered_size];
+                }
+            } else _ = try self.seekTo(index);
+
             const value_size = self.file.read(self.buffer) catch return error.ReadFailed;
-            if (value_size == 0) return error.EndOfStream;
+
+            if (self.is_stream_only) {
+                self.streamed_size = @truncate(value_size);
+                self.size_has_expired = false;
+            } else {
+                if (value_size == 0) return error.EndOfStream;
+            }
+
             return self.buffer[0..value_size];
         }
 
